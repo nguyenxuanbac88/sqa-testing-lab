@@ -1,11 +1,34 @@
 ﻿using ExcelDataReader;
 using OfficeOpenXml;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome; // BỔ SUNG: Thư viện để cấu hình Chrome ẩn danh
+using OpenQA.Selenium.Support.UI;
 
 namespace sqa_automation_testing.Utilities
 {
     public class TransferFundsHelpers
     {
+        // ==================================================================
+        // BỔ SUNG: HÀM KHỞI TẠO DRIVER "TÀNG HÌNH" (Không đụng DriverFactory)
+        // ==================================================================
+        public static IWebDriver InitDriverBypassCloudflare()
+        {
+            ChromeOptions options = new ChromeOptions();
+            options.AddArgument("--start-maximized"); // Giữ nguyên code của Khoa
+
+            // --- MA THUẬT ẨN DANH VƯỢT CLOUDFLARE CHỈ CÓ Ở NHÁNH CỦA BẠN ---
+            // 1. Tắt cờ báo hiệu Automation của trình duyệt
+            options.AddArgument("--disable-blink-features=AutomationControlled");
+            // 2. Ẩn dòng chữ "Chrome is being controlled..."
+            options.AddExcludedArgument("enable-automation");
+            options.AddAdditionalOption("useAutomationExtension", false);
+
+            IWebDriver driver = new ChromeDriver(options);
+            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(10); // Giữ nguyên code của Khoa
+
+            return driver;
+        }
+
         public static void UpdateExcelResult(string testCaseId, string actualResult, string expectedResult, string status = "", string screenshotFileName = "")
         {
             try
@@ -22,7 +45,6 @@ namespace sqa_automation_testing.Utilities
 
                 using (var package = new ExcelPackage(new FileInfo(excelPath)))
                 {
-                    // TÌM ĐÍCH DANH SHEET TESTCASE ĐỂ GHI
                     var worksheet = package.Workbook.Worksheets.FirstOrDefault(w => w.Name.Contains("TestCase"));
                     if (worksheet != null)
                     {
@@ -38,13 +60,13 @@ namespace sqa_automation_testing.Utilities
 
                         if (foundRow > 0)
                         {
-                            worksheet.Cells[foundRow, 10].Value = actualResult; // Cột J
+                            worksheet.Cells[foundRow, 10].Value = actualResult;
                             string finalStatus = string.IsNullOrWhiteSpace(status)
                                 ? (CompareExpectedAndActual(expectedResult, actualResult) ? "PASS" : "FAIL")
                                 : status;
-                            worksheet.Cells[foundRow, 11].Value = finalStatus; // Cột K
+                            worksheet.Cells[foundRow, 11].Value = finalStatus;
                             if (!string.IsNullOrEmpty(screenshotFileName))
-                                worksheet.Cells[foundRow, 12].Value = screenshotFileName; // Cột L
+                                worksheet.Cells[foundRow, 12].Value = screenshotFileName;
                         }
                     }
                     package.Save();
@@ -52,7 +74,7 @@ namespace sqa_automation_testing.Utilities
             }
             catch (Exception ex)
             {
-                TestContext.WriteLine($"Lỗi ghi Excel: {ex.Message}");
+                Console.WriteLine($"Lỗi ghi Excel: {ex.Message}");
             }
         }
 
@@ -86,9 +108,6 @@ namespace sqa_automation_testing.Utilities
             }
         }
 
-        /// <summary>
-        /// Hàm đọc dòng Excel theo ID, tự động quét ô gộp, xử lý [Empty] và bóc tách từ khóa
-        /// </summary>
         public static (string Amount, string ExpectedKeyword) GetTestDataById(string testCaseId)
         {
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
@@ -103,13 +122,11 @@ namespace sqa_automation_testing.Utilities
                 {
                     var result = reader.AsDataSet();
 
-                    // NÂNG CẤP QUAN TRỌNG: KHÔNG DÙNG Tables[0] NỮA!
-                    // Lệnh này ép code đi tìm đúng cái sheet nào có chữ "TestCase" dù nó nằm ở vị trí nào.
                     var table = result.Tables.Cast<System.Data.DataTable>().FirstOrDefault(t => t.TableName.Contains("TestCase"));
 
                     if (table != null)
                     {
-                        for (int i = 8; i < table.Rows.Count; i++) // Duyệt từ dòng 9
+                        for (int i = 8; i < table.Rows.Count; i++)
                         {
                             var row = table.Rows[i];
                             string currentId = row[2]?.ToString()?.Trim() ?? "";
@@ -119,7 +136,6 @@ namespace sqa_automation_testing.Utilities
                                 string rawAmount = "";
                                 string rawExpected = "";
 
-                                // Quét gom data các dòng bị gộp
                                 for (int j = i; j < table.Rows.Count; j++)
                                 {
                                     string nextId = table.Rows[j][2]?.ToString()?.Trim() ?? "";
@@ -132,35 +148,25 @@ namespace sqa_automation_testing.Utilities
                                     if (!string.IsNullOrWhiteSpace(colI)) rawExpected += colI + " ";
                                 }
 
-                                // 1. XỬ LÝ AMOUNT
                                 string finalAmount = "";
                                 if (rawAmount.Contains("[Empty]", StringComparison.OrdinalIgnoreCase))
-                                {
                                     finalAmount = "";
-                                }
                                 else if (rawAmount.Contains("Amount:", StringComparison.OrdinalIgnoreCase))
                                 {
                                     int idx = rawAmount.IndexOf("Amount:", StringComparison.OrdinalIgnoreCase) + 7;
                                     finalAmount = rawAmount.Substring(idx).Trim().Split(' ')[0];
                                 }
                                 else if (!string.IsNullOrWhiteSpace(rawAmount))
-                                {
                                     finalAmount = rawAmount.Trim();
-                                }
 
-                                // 2. XỬ LÝ EXPECTED RESULT
                                 string expectedKeyword = rawExpected;
                                 int startIdx = rawExpected.IndexOf('"');
                                 int endIdx = rawExpected.LastIndexOf('"');
 
                                 if (startIdx != -1 && endIdx != -1 && endIdx > startIdx)
-                                {
                                     expectedKeyword = rawExpected.Substring(startIdx + 1, endIdx - startIdx - 1);
-                                }
                                 else
-                                {
                                     expectedKeyword = expectedKeyword.Trim();
-                                }
 
                                 return (finalAmount, expectedKeyword);
                             }
@@ -169,6 +175,21 @@ namespace sqa_automation_testing.Utilities
                 }
             }
             return ("", "");
+        }
+
+        // Vẫn giữ lại hàm này làm phương án dự phòng bảo vệ lớp thứ 2
+        public static void WaitForCloudflare(IWebDriver driver, int timeoutInSeconds = 30)
+        {
+            try
+            {
+                WebDriverWait wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeoutInSeconds));
+                wait.Until(d => !d.Title.Contains("Just a moment", StringComparison.OrdinalIgnoreCase));
+                System.Threading.Thread.Sleep(1500);
+            }
+            catch
+            {
+                Console.WriteLine("Cảnh báo: Đã đợi Cloudflare 30s nhưng chưa qua.");
+            }
         }
     }
 }

@@ -19,9 +19,14 @@ namespace sqa_automation_testing.Tests
         public void Setup()
         {
             _currentTestName = TestContext.CurrentContext.Test.Name;
-            _driver = DriverFactory.InitDriver();
+            _driver = TransferFundsHelpers.InitDriverBypassCloudflare();
 
             _driver.Navigate().GoToUrl("https://parabank.parasoft.com/parabank/register.htm");
+
+            // =========================================================
+            // BỔ SUNG: GỌI HÀM CHỜ CLOUDFLARE NGAY SAU KHI MỞ TRANG WEB
+            // =========================================================
+            TransferFundsHelpers.WaitForCloudflare(_driver);
 
             RegisterPage registerPage = new RegisterPage(_driver);
             string dynamicUser = "user_" + DateTime.Now.ToString("yyyyMMddHHmmss");
@@ -101,6 +106,7 @@ namespace sqa_automation_testing.Tests
                 throw;
             }
         }
+
 
         [Test]
         public void TC_TRA_017_BoTrongAmount()
