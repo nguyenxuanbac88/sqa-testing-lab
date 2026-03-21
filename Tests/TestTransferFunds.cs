@@ -60,27 +60,44 @@ namespace sqa_automation_testing.Tests
         public void TC_TRA_011_ChuyenTienThanhCong()
         {
             string testCaseId = "TC_TRA_011";
-            // Sửa lại cho khớp với text tiếng Anh trên web để Helper so sánh ra PASS
-            string expectedResult = "Transfer Complete!";
+
+            // 1. GỌI HELPER ĐỂ LẤY DATA TỪ EXCEL THEO ĐÚNG ID
+            var testData = TransferFundsHelpers.GetTestDataById(testCaseId);
+            string amountToTransfer = testData.Amount;          // Sẽ tự lấy giá trị "100"
+            string expectedKeyword = testData.ExpectedKeyword;  // Sẽ tự lấy chữ "Transfer Complete!"
+
+            // THÊM DÒNG NÀY ĐỂ SOI DATA:
+            TestContext.WriteLine($"[DEBUG] Data từ Excel -> Số tiền nhập: '{amountToTransfer}', Từ khóa chờ đợi: '{expectedKeyword}'");
+
             string actualResult = "";
 
             try
             {
-                string amountToTransfer = "100";
                 _transferPage.PerformTransfer(amountToTransfer, _account1, _account2);
                 System.Threading.Thread.Sleep(2000);
 
                 actualResult = _transferPage.GetResultMessage();
-                bool isSuccess = actualResult.Contains("Complete");
 
-                // Không cần truyền biến status, để Helper tự so sánh expectedResult và actualResult
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedResult);
-                Assert.IsTrue(isSuccess);
+                // 2. SO SÁNH LINH HOẠT VỚI TỪ KHÓA TỪ EXCEL
+                bool isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
+
+                if (isSuccess)
+                {
+                    TestContext.WriteLine($"Test PASSED: Bắt được từ khóa '{expectedKeyword}' trong '{actualResult}'");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
+                }
+                else
+                {
+                    TestContext.WriteLine($"Test FAILED: Không tìm thấy '{expectedKeyword}'. Thực tế là: '{actualResult}'");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL");
+                }
+
+                Assert.IsTrue(isSuccess, $"Giao dịch thất bại. Không tìm thấy từ khóa '{expectedKeyword}'.");
             }
             catch (Exception ex)
             {
                 string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, ex.Message, expectedResult, "FAIL", fileName);
+                TransferFundsHelpers.UpdateExcelResult(testCaseId, ex.Message, expectedKeyword, "FAIL", fileName);
                 throw;
             }
         }
@@ -89,39 +106,44 @@ namespace sqa_automation_testing.Tests
         public void TC_TRA_017_BoTrongAmount()
         {
             string testCaseId = "TC_TRA_017";
-            // LƯU Ý: Sửa expectedResult thành "error" để Helper trong Excel ghi PASS 
-            // vì hàm Compare của bạn dùng lệnh .Contains()
-            string expectedResult = "error";
+
+            // 1. GỌI HELPER ĐỂ LẤY DATA TỪ EXCEL 
+            var testData = TransferFundsHelpers.GetTestDataById(testCaseId);
+            string amountToTransfer = testData.Amount;          // Sẽ tự hiểu [Empty] là "" (rỗng)
+            string expectedKeyword = testData.ExpectedKeyword;  // Sẽ tự bóc được chữ "error"
+
+            // THÊM DÒNG NÀY ĐỂ SOI DATA:
+            TestContext.WriteLine($"[DEBUG] Data từ Excel -> Số tiền nhập: '{amountToTransfer}', Từ khóa chờ đợi: '{expectedKeyword}'");
+
             string actualResult = "";
 
             try
             {
-                _transferPage.PerformTransfer("", _account1, _account2);
+                _transferPage.PerformTransfer(amountToTransfer, _account1, _account2);
                 System.Threading.Thread.Sleep(1500);
 
                 actualResult = _transferPage.GetResultMessage();
 
-                // CHỈ CHECK NẾU CÓ CHỨA "ERROR" (không phân biệt hoa thường)
-                bool isErrorDisplayed = actualResult.ToLower().Contains("error");
+                // 2. SO SÁNH LINH HOẠT
+                bool isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
 
-                if (isErrorDisplayed)
+                if (isSuccess)
                 {
                     TestContext.WriteLine($"Test PASSED: Đã bắt được lỗi: {actualResult}");
-                    // Truyền cứng "PASS" vào status để chắc chắn Excel ghi PASS
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedResult, "PASS");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
                 }
                 else
                 {
-                    TestContext.WriteLine($"Test FAILED: Không tìm thấy từ khóa 'error'. Thông báo nhận được: {actualResult}");
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedResult, "FAIL");
+                    TestContext.WriteLine($"Test FAILED: Không tìm thấy từ khóa '{expectedKeyword}'. Thông báo nhận được: {actualResult}");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL");
                 }
 
-                Assert.IsTrue(isErrorDisplayed, "Mong đợi thông báo lỗi nhưng không tìm thấy từ khóa 'error'.");
+                Assert.IsTrue(isSuccess, $"Mong đợi thông báo lỗi nhưng không tìm thấy từ khóa '{expectedKeyword}'.");
             }
             catch (Exception ex)
             {
                 string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, ex.Message, expectedResult, "FAIL", fileName);
+                TransferFundsHelpers.UpdateExcelResult(testCaseId, ex.Message, expectedKeyword, "FAIL", fileName);
                 throw;
             }
         }

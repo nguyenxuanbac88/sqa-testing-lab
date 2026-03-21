@@ -1,5 +1,5 @@
 ﻿using ExcelDataReader;
-using OfficeOpenXml; // Thư viện EPPlus để đọc/ghi Excel
+using OfficeOpenXml;
 using OpenQA.Selenium;
 
 namespace sqa_automation_testing.Utilities
@@ -11,26 +11,22 @@ namespace sqa_automation_testing.Utilities
             try
             {
                 ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
-
-                // Tự động tìm đường dẫn thư mục gốc của dự án (Project Root)
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                // Đi ngược lên 3 cấp từ bin/Debug/net... để về thư mục project
                 DirectoryInfo projectRoot = Directory.GetParent(baseDir).Parent.Parent.Parent;
                 string excelPath = Path.Combine(projectRoot.FullName, "TestData", "Testcase.xlsx");
 
                 if (!File.Exists(excelPath))
                 {
-                    // Nếu không tìm thấy ở gốc, dùng lại đường dẫn base cũ
                     excelPath = Path.Combine(baseDir, "TestData", "Testcase.xlsx");
                 }
 
                 using (var package = new ExcelPackage(new FileInfo(excelPath)))
                 {
+                    // TÌM ĐÍCH DANH SHEET TESTCASE ĐỂ GHI
                     var worksheet = package.Workbook.Worksheets.FirstOrDefault(w => w.Name.Contains("TestCase"));
                     if (worksheet != null)
                     {
                         int foundRow = -1;
-                        // EPPlus dùng Index 1 cho Row và Column
                         for (int row = 9; row <= worksheet.Dimension.End.Row; row++)
                         {
                             if (worksheet.Cells[row, 3].Text == testCaseId)
@@ -51,43 +47,28 @@ namespace sqa_automation_testing.Utilities
                                 worksheet.Cells[foundRow, 12].Value = screenshotFileName; // Cột L
                         }
                     }
-                    package.Save(); // NHỚ ĐÓNG FILE EXCEL TRƯỚC KHI CHẠY
+                    package.Save();
                 }
             }
             catch (Exception ex)
             {
-                // Ghi lỗi ra màn hình Output của Test để bạn biết tại sao không ghi được
                 TestContext.WriteLine($"Lỗi ghi Excel: {ex.Message}");
             }
         }
+
         private static bool CompareExpectedAndActual(string expectedResult, string actualResult)
         {
-            if (string.IsNullOrWhiteSpace(expectedResult) || string.IsNullOrWhiteSpace(actualResult))
-                return false;
-
-            // Xóa khoảng trắng thừa và chuyển về chữ thường để so sánh
-            string exp = expectedResult.Trim().ToLower();
-            string act = actualResult.Trim().ToLower();
-
-            // Chỉ cần chuỗi thực tế (act) có CHỨA nội dung mong đợi (exp) là Pass
-            return act.Contains(exp);
+            if (string.IsNullOrWhiteSpace(expectedResult) || string.IsNullOrWhiteSpace(actualResult)) return false;
+            return actualResult.Trim().ToLower().Contains(expectedResult.Trim().ToLower());
         }
 
-        /// <summary>
-        /// Chụp màn hình khi Testcase bị FAIL và lưu vào thư mục Screenshots
-        /// </summary>
         public static string TakeScreenshotOnFail(IWebDriver driver, string testName)
         {
             try
             {
                 string screenshotFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
+                if (!Directory.Exists(screenshotFolder)) Directory.CreateDirectory(screenshotFolder);
 
-                if (!Directory.Exists(screenshotFolder))
-                {
-                    Directory.CreateDirectory(screenshotFolder);
-                }
-
-                // Tên file: TestName_NamThangNgay_GioPhutGiay.png
                 string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 string fileName = $"{testName}_{timestamp}.png";
                 string fullPath = Path.Combine(screenshotFolder, fileName);
@@ -96,7 +77,7 @@ namespace sqa_automation_testing.Utilities
                 Screenshot screenshot = screenshotDriver.GetScreenshot();
                 screenshot.SaveAsFile(fullPath);
 
-                return fileName; // Chỉ trả về tên file để ghi vào Excel cho gọn
+                return fileName;
             }
             catch (Exception ex)
             {
@@ -105,37 +86,89 @@ namespace sqa_automation_testing.Utilities
             }
         }
 
-        public static IEnumerable<TestCaseData> GetTransferTestData()
+        /// <summary>
+        /// Hàm đọc dòng Excel theo ID, tự động quét ô gộp, xử lý [Empty] và bóc tách từ khóa
+        /// </summary>
+        public static (string Amount, string ExpectedKeyword) GetTestDataById(string testCaseId)
         {
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            // Đi ngược lên để tìm thư mục gốc Project
             DirectoryInfo projectRoot = Directory.GetParent(baseDir).Parent.Parent.Parent;
             string path = Path.Combine(projectRoot.FullName, "TestData", "Testcase.xlsx");
+            if (!File.Exists(path)) path = Path.Combine(baseDir, "TestData", "Testcase.xlsx");
 
             using (var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 using (var reader = ExcelReaderFactory.CreateReader(stream))
                 {
-                    var result = reader.AsDataSet().Tables[0];
-                    // Duyệt từ dòng 9 (index 8)
-                    for (int i = 8; i < result.Rows.Count; i++)
-                    {
-                        var row = result.Rows[i];
+                    var result = reader.AsDataSet();
 
-                        // Kiểm tra điều kiện Run=YES và TestCaseID bắt đầu bằng TC_TRA
-                        if (row[13]?.ToString()?.Equals("YES", StringComparison.OrdinalIgnoreCase) == true &&
-                            row[2]?.ToString()?.StartsWith("TC_TRA") == true)
+                    // NÂNG CẤP QUAN TRỌNG: KHÔNG DÙNG Tables[0] NỮA!
+                    // Lệnh này ép code đi tìm đúng cái sheet nào có chữ "TestCase" dù nó nằm ở vị trí nào.
+                    var table = result.Tables.Cast<System.Data.DataTable>().FirstOrDefault(t => t.TableName.Contains("TestCase"));
+
+                    if (table != null)
+                    {
+                        for (int i = 8; i < table.Rows.Count; i++) // Duyệt từ dòng 9
                         {
-                            yield return new TestCaseData(
-                                row[7]?.ToString() ?? "", // Amount
-                                row[8]?.ToString() ?? "", // Expected Result
-                                row[2]?.ToString() ?? ""  // TestCase ID
-                            ).SetName(row[2]?.ToString() ?? $"Row_{i}");
+                            var row = table.Rows[i];
+                            string currentId = row[2]?.ToString()?.Trim() ?? "";
+
+                            if (currentId.Equals(testCaseId, StringComparison.OrdinalIgnoreCase))
+                            {
+                                string rawAmount = "";
+                                string rawExpected = "";
+
+                                // Quét gom data các dòng bị gộp
+                                for (int j = i; j < table.Rows.Count; j++)
+                                {
+                                    string nextId = table.Rows[j][2]?.ToString()?.Trim() ?? "";
+                                    if (j > i && !string.IsNullOrEmpty(nextId)) break;
+
+                                    string colH = table.Rows[j][7]?.ToString() ?? "";
+                                    string colI = table.Rows[j][8]?.ToString() ?? "";
+
+                                    if (!string.IsNullOrWhiteSpace(colH)) rawAmount += colH + " ";
+                                    if (!string.IsNullOrWhiteSpace(colI)) rawExpected += colI + " ";
+                                }
+
+                                // 1. XỬ LÝ AMOUNT
+                                string finalAmount = "";
+                                if (rawAmount.Contains("[Empty]", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    finalAmount = "";
+                                }
+                                else if (rawAmount.Contains("Amount:", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    int idx = rawAmount.IndexOf("Amount:", StringComparison.OrdinalIgnoreCase) + 7;
+                                    finalAmount = rawAmount.Substring(idx).Trim().Split(' ')[0];
+                                }
+                                else if (!string.IsNullOrWhiteSpace(rawAmount))
+                                {
+                                    finalAmount = rawAmount.Trim();
+                                }
+
+                                // 2. XỬ LÝ EXPECTED RESULT
+                                string expectedKeyword = rawExpected;
+                                int startIdx = rawExpected.IndexOf('"');
+                                int endIdx = rawExpected.LastIndexOf('"');
+
+                                if (startIdx != -1 && endIdx != -1 && endIdx > startIdx)
+                                {
+                                    expectedKeyword = rawExpected.Substring(startIdx + 1, endIdx - startIdx - 1);
+                                }
+                                else
+                                {
+                                    expectedKeyword = expectedKeyword.Trim();
+                                }
+
+                                return (finalAmount, expectedKeyword);
+                            }
                         }
                     }
                 }
             }
+            return ("", "");
         }
     }
 }
