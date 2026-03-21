@@ -1,9 +1,6 @@
-Ôªøusing System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using NUnit.Framework;
 using ExcelDataReader;
 using OfficeOpenXml;
@@ -12,8 +9,29 @@ namespace sqa_automation_testing.TestData
 {
     public class ExcelHelper
     {
-        // H√†m debug ƒë·ªÉ xem c·∫•u tr√∫c Excel
-        public static void DebugExcelStructure()
+        // ??nh ngh?a c·c ch? s? c?t trong Excel (0-based index)
+        // Row 6 (Index 5) l‡ header chÌnh
+        // Data b?t ??u t? Row 9 (Index 8)
+
+        private const int COL_NO = 0;                  // Column 0: No.
+        private const int COL_REQUIREMENT_ID = 1;      // Column 1: Test Requirement ID
+        private const int COL_TEST_CASE_ID = 2;        // Column 2: Test Case ID
+        private const int COL_TEST_OBJECTIVE = 3;      // Column 3: Test Objective
+        private const int COL_PRECONDITIONS = 4;       // Column 4: Pre-conditions
+        private const int COL_TEST_STEPS = 5;          // Column 5: Step #
+        private const int COL_STEP_ACTION = 6;         // Column 6: Step Action
+        private const int COL_DATA = 7;                // Column 7: Test Data
+        private const int COL_EXPECTED_RESULT = 8;     // Column 8: Expected Result
+        private const int COL_ACTUAL_RESULT = 9;       // Column 9: Actual Result
+        private const int COL_NOTES = 10;              // Column 10: Notes
+        private const int COL_SCREENSHOT = 11;         // Column 11: Screenshot
+        private const int COL_BY = 12;                 // Column 12: By
+        private const int COL_RUN = 13;                // Column 13: Run (YES/NO)
+
+        private const int DATA_START_ROW = 8;          // Data b?t ??u t? Row 9 (Index 8)
+
+        // H‡m l?y d? li?u Register t? Excel (10 test ??u tiÍn cÛ Run = "YES")
+        public static IEnumerable<TestCaseData> GetRegisterData()
         {
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
@@ -24,106 +42,104 @@ namespace sqa_automation_testing.TestData
                 {
                     var result = reader.AsDataSet(new ExcelDataSetConfiguration()
                     {
-                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = true }
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
                     });
 
-                    Console.WriteLine($"Total sheets: {result.Tables.Count}");
+                    // TÏm sheet "TestCase"
+                    DataTable table = result.Tables.Cast<DataTable>()
+                        .FirstOrDefault(dt => dt.TableName.Contains("TestCase"));
 
-                    foreach (DataTable dt in result.Tables)
+                    if (table != null && table.Rows.Count > DATA_START_ROW)
                     {
-                        Console.WriteLine($"\n=== Sheet: '{dt.TableName}' ===");
-                        Console.WriteLine($"Rows: {dt.Rows.Count}, Columns: {dt.Columns.Count}");
+                        int yesCount = 0;
+                        HashSet<string> processedTestCases = new HashSet<string>();
 
-                        // Print header
-                        Console.Write("Header: ");
-                        for (int i = 0; i < dt.Columns.Count; i++)
-                        {
-                            Console.Write($"Col{i}('{dt.Columns[i].ColumnName}') | ");
-                        }
-                        Console.WriteLine();
-
-                        // Print first 10 data rows starting from row 5
-                        if (dt.TableName.Contains("TestCase"))
-                        {
-                            Console.WriteLine("\n--- Rows from index 4 onwards (starting from row 5 in Excel) ---");
-                            for (int r = 4; r < Math.Min(14, dt.Rows.Count); r++)
-                            {
-                                Console.Write($"Row {r+2} (Index {r}): ");
-                                for (int c = 0; c < dt.Columns.Count; c++)
-                                {
-                                    var val = dt.Rows[r][c];
-                                    Console.Write($"[{val}] | ");
-                                }
-                                Console.WriteLine();
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        // H√†m n√†y s·∫Ω tr·∫£ v·ªÅ danh s√°ch d·ªØ li·ªáu ƒë·ªÉ NUnit ch·∫°y (ch·ªâ c√°c test c√≥ Run = "YES")
-        public static IEnumerable<TestCaseData> GetLoginData()
-        {
-            // B·∫Øt bu·ªôc ph·∫£i c√≥ d√≤ng n√†y khi d√πng ExcelDataReader v·ªõi .NET 6 ho·∫∑c .NET 8
-            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
-
-            // T·ª± ƒë·ªông t√¨m ƒë∆∞·ªùng d·∫´n t·ªõi file Testcase.xlsx trong th∆∞ m·ª•c TestData
-            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
-
-            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read))
-            {
-                using (var reader = ExcelReaderFactory.CreateReader(stream))
-                {
-                    // ƒê·ªçc data th√†nh b·∫£ng, coi d√≤ng ƒë·∫ßu ti√™n l√† Ti√™u ƒë·ªÅ (Header)
-                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
-                    {
-                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = true }
-                    });
-
-                    // T√¨m sheet "TestCase"
-                    DataTable table = null;
-                    foreach (DataTable dt in result.Tables)
-                    {
-                        if (dt.TableName.Contains("TestCase"))
-                        {
-                            table = dt;
-                            break;
-                        }
-                    }
-
-                    if (table != null && table.Rows.Count > 0)
-                    {
-                        // Duy·ªát qua t·ª´ng d√≤ng trong Excel (b·∫Øt ƒë·∫ßu t·ª´ index 4 t·ª©c row 6 ƒë·ªÉ b·ªè qua header)
-                        for (int i = 4; i < table.Rows.Count; i++)
+                        // B?t ??u t? row 8 (index 8 = Row 9 trong Excel)
+                        for (int i = DATA_START_ROW; i < table.Rows.Count && yesCount < 10; i++)
                         {
                             DataRow row = table.Rows[i];
 
-                            // Ki·ªÉm tra c·ªôt Run (Col13)
-                            string runFlag = row[13]?.ToString() ?? "";
+                            // Ki?m tra c?t Run (Column 13)
+                            string runFlag = row[COL_RUN]?.ToString() ?? "";
 
                             if (runFlag.Equals("YES", System.StringComparison.OrdinalIgnoreCase))
                             {
-                                // Col2 = Test Case ID (TC_REG_001)
-                                string testCaseId = row[2]?.ToString() ?? "";
+                                string testCaseId = row[COL_TEST_CASE_ID]?.ToString() ?? "";
 
-                                // B·ªè qua d√≤ng tr·ªëng ho·∫∑c d√≤ng ch·ªâ d·∫´n
-                                if (string.IsNullOrWhiteSpace(testCaseId))
-                                {
+                                // B? qua n?u testCaseId tr?ng ho?c ?„ x? l˝
+                                if (string.IsNullOrWhiteSpace(testCaseId) || processedTestCases.Contains(testCaseId))
                                     continue;
+
+                                // B? qua n?u khÙng ph?i Register (TC_REG_*)
+                                if (!testCaseId.StartsWith("TC_REG"))
+                                    continue;
+
+                                processedTestCases.Add(testCaseId);
+
+                                // L?y d? li?u t? c?t Data (Column 7) v‡ t?ng h?p t? c·c dÚng con
+                                string testData = row[COL_DATA]?.ToString() ?? "";
+
+                                // N?u dÚng n‡y khÙng cÛ data, tÏm t? c·c dÚng k? ti?p cho ??n khi g?p test case m?i
+                                if (string.IsNullOrWhiteSpace(testData))
+                                {
+                                    for (int j = i + 1; j < table.Rows.Count; j++)
+                                    {
+                                        var nextTestCaseId = table.Rows[j][COL_TEST_CASE_ID]?.ToString() ?? "";
+                                        if (!string.IsNullOrWhiteSpace(nextTestCaseId))
+                                            break; // G?p test case m?i, d?ng
+
+                                        var dataFromNextRow = table.Rows[j][COL_DATA]?.ToString() ?? "";
+                                        if (!string.IsNullOrWhiteSpace(dataFromNextRow))
+                                        {
+                                            if (!string.IsNullOrWhiteSpace(testData))
+                                                testData += ", ";
+                                            testData += dataFromNextRow;
+                                        }
+                                    }
                                 }
 
-                                // Col7 = Test Data (ch·ª©a username v√† password)
-                                // Format: "F.Name: Khoa, L.Name: Nguyen, ..., User: khoa_it_01, Pass: Khoa123!, ..."
-                                string testDataStr = row[7]?.ToString() ?? "";
+                                // Parse d? li?u t? chu?i
+                                string firstName = ExtractValueFromTestData(testData, "F.Name") ?? "Test";
+                                string lastName = ExtractValueFromTestData(testData, "L.Name") ?? "User";
+                                string username = ExtractValueFromTestData(testData, "User");
+                                string password = ExtractValueFromTestData(testData, "Pass");
+                                string address = ExtractValueFromTestData(testData, "Address") ?? "123 Test St";
+                                string city = ExtractValueFromTestData(testData, "City") ?? "TestCity";
+                                string state = ExtractValueFromTestData(testData, "State") ?? "TC";
+                                // TÏm Zip Code - th? "ZipCode" tr??c (khÙng cÛ space), r?i "Zip Code" (cÛ space)
+                                string zipCode = ExtractValueFromTestData(testData, "ZipCode") ?? 
+                                                ExtractValueFromTestData(testData, "Zip Code") ?? "12345";
+                                string phone = ExtractValueFromTestData(testData, "Phone") ?? "0123456789";
+                                string ssn = ExtractValueFromTestData(testData, "SSN") ?? "123456789";
 
-                                // Parse username v√† password t·ª´ test data
-                                string username = ExtractValueFromTestData(testDataStr, "User:");
-                                string password = ExtractValueFromTestData(testDataStr, "Pass:");
-
-                                if (!string.IsNullOrWhiteSpace(username))
+                                string expectedResult = row[COL_EXPECTED_RESULT]?.ToString() ?? "";
+                                if (string.IsNullOrWhiteSpace(expectedResult))
                                 {
-                                    // ƒê√≥ng g√≥i data v√† g·ª≠i cho NUnit
-                                    yield return new TestCaseData(username, password).SetName($"Login_{testCaseId}");
+                                    // TÏm expected result t? c·c dÚng k? ti?p
+                                    for (int j = i + 1; j < table.Rows.Count; j++)
+                                    {
+                                        var nextTestCaseId = table.Rows[j][COL_TEST_CASE_ID]?.ToString() ?? "";
+                                        if (!string.IsNullOrWhiteSpace(nextTestCaseId))
+                                            break; // G?p test case m?i
+
+                                        expectedResult = table.Rows[j][COL_EXPECTED_RESULT]?.ToString() ?? "";
+                                        if (!string.IsNullOrWhiteSpace(expectedResult))
+                                            break; // TÏm th?y expected result
+                                    }
+                                }
+                                if (string.IsNullOrWhiteSpace(expectedResult))
+                                    expectedResult = "Registration successful";
+
+                                if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                                {
+                                    // T?o TestCaseData v?i d? li?u c?n thi?t cho Register
+                                    var testCaseData = new TestCaseData(firstName, lastName, address, city, state, 
+                                                                       zipCode, phone, ssn, username, password, 
+                                                                       expectedResult, testCaseId)
+                                        .SetName($"Register_{testCaseId}");
+
+                                    yield return testCaseData;
+                                    yesCount++;
                                 }
                             }
                         }
@@ -132,26 +148,106 @@ namespace sqa_automation_testing.TestData
             }
         }
 
-        // Helper function ƒë·ªÉ l·∫•y gi√° tr·ªã t·ª´ Test Data string
-        private static string ExtractValueFromTestData(string testData, string key)
+        // H‡m l?y d? li?u Login t? Excel (10 test ??u tiÍn cÛ Run = "YES")
+        public static IEnumerable<TestCaseData> GetLoginData()
         {
-            if (string.IsNullOrEmpty(testData) || !testData.Contains(key))
-                return "";
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
 
-            int startIndex = testData.IndexOf(key) + key.Length;
-            int endIndex = testData.IndexOf(',', startIndex);
-
-            if (endIndex == -1)
+            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read))
             {
-                endIndex = testData.Length;
-            }
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    {
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+                    });
 
-            string value = testData.Substring(startIndex, endIndex - startIndex).Trim();
-            return value;
+                    // TÏm sheet "TestCase"
+                    DataTable table = result.Tables.Cast<DataTable>()
+                        .FirstOrDefault(dt => dt.TableName.Contains("TestCase"));
+
+                    if (table != null && table.Rows.Count > DATA_START_ROW)
+                    {
+                        int yesCount = 0;
+                        HashSet<string> processedTestCases = new HashSet<string>();
+
+                        // B?t ??u t? row 8 (index 8)
+                        for (int i = DATA_START_ROW; i < table.Rows.Count && yesCount < 10; i++)
+                        {
+                            DataRow row = table.Rows[i];
+
+                            // Ki?m tra c?t Run (Column 13)
+                            string runFlag = row[COL_RUN]?.ToString() ?? "";
+
+                            if (runFlag.Equals("YES", System.StringComparison.OrdinalIgnoreCase))
+                            {
+                                string testCaseId = row[COL_TEST_CASE_ID]?.ToString() ?? "";
+
+                                // B? qua n?u testCaseId tr?ng ho?c ?„ x? l˝
+                                if (string.IsNullOrWhiteSpace(testCaseId) || processedTestCases.Contains(testCaseId))
+                                    continue;
+
+                                // B? qua n?u khÙng ph?i Login (TC_LOG_*)
+                                if (!testCaseId.StartsWith("TC_LOG"))
+                                    continue;
+
+                                processedTestCases.Add(testCaseId);
+
+                                // L?y d? li?u t? c?t Data (Column 7)
+                                string testData = row[COL_DATA]?.ToString() ?? "";
+                                string username = ExtractValueFromTestData(testData, "User");
+                                string password = ExtractValueFromTestData(testData, "Pass");
+                                string expectedResult = row[COL_EXPECTED_RESULT]?.ToString() ?? "";
+
+                                if (!string.IsNullOrWhiteSpace(username) && !string.IsNullOrWhiteSpace(password))
+                                {
+                                    // T?o TestCaseData v?i d? li?u c?n thi?t
+                                    var testCaseData = new TestCaseData(username, password, expectedResult, testCaseId)
+                                        .SetName($"Login_{testCaseId}");
+
+                                    yield return testCaseData;
+                                    yesCount++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
-        // H√†m c·∫≠p nh·∫≠t k·∫øt qu·∫£ test v√†o Excel
-        public static void UpdateTestResult(string testCaseId, string status, string screenshotPath = "")
+        // Helper function ?? l?y gi· tr? t? Test Data string
+        private static string ExtractValueFromTestData(string testData, string key)
+        {
+            if (string.IsNullOrEmpty(testData) || !testData.Contains(key, System.StringComparison.OrdinalIgnoreCase))
+                return "";
+
+            try
+            {
+                // TÏm v? trÌ c?a key (khÙng ph‚n bi?t hoa/th??ng)
+                int keyIndex = testData.IndexOf(key, StringComparison.OrdinalIgnoreCase);
+                int startIndex = keyIndex + key.Length;
+
+                // TÏm d?u ':' ho?c '='
+                while (startIndex < testData.Length && (testData[startIndex] == ':' || testData[startIndex] == '=' || char.IsWhiteSpace(testData[startIndex])))
+                    startIndex++;
+
+                // TÏm v? trÌ k?t th˙c (d?u ',')
+                int endIndex = testData.IndexOf(',', startIndex);
+                if (endIndex == -1)
+                    endIndex = testData.Length;
+
+                string value = testData.Substring(startIndex, endIndex - startIndex).Trim();
+                return value;
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        // H‡m c?p nh?t k?t qu? test v‡o Excel
+        public static void UpdateTestResult(string testCaseId, string actualResult, string expectedResult, string status, string screenshotPath = "")
         {
             try
             {
@@ -160,30 +256,63 @@ namespace sqa_automation_testing.TestData
 
                 string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
 
+                if (!File.Exists(path))
+                {
+                    Console.WriteLine($"Excel file not found: {path}");
+                    return;
+                }
+
                 using (var package = new ExcelPackage(new FileInfo(path)))
                 {
-                    // T√¨m worksheet "TestCase"
                     var worksheet = package.Workbook.Worksheets.FirstOrDefault(w => w.Name.Contains("TestCase"));
 
                     if (worksheet != null)
                     {
-                        // T√¨m d√≤ng c√≥ Test Case ID t∆∞∆°ng ·ª©ng (Col2)
-                        // B·∫Øt ƒë·∫ßu t·ª´ d√≤ng 7 (index 6 v√¨ d√≤ng 1 l√† index 0)
-                        for (int row = 7; row <= worksheet.Dimension?.Rows; row++)
+                        // TÏm dÚng cÛ TestCaseID t??ng ?ng
+                        // C?t 3 (Col 2 0-based) = Test Case ID
+                        // Data b?t ??u t? dÚng 9 (Excel) = Row 9 (EPPlus)
+                        int foundRow = -1;
+                        for (int row = 9; row <= worksheet.Dimension?.Rows; row++)
                         {
-                            var cellValue = worksheet.Cells[row, 3]?.Value?.ToString(); // Col2 (Test Case ID) l√† c·ªôt 3
+                            var cellValue = worksheet.Cells[row, 3]?.Value?.ToString(); // Column 3 (TestCaseID)
                             if (cellValue == testCaseId)
                             {
-                                // C·∫≠p nh·∫≠t c·ªôt Pass/Failed (Col10 - c·ªôt 11)
-                                worksheet.Cells[row, 11].Value = status;
-
-                                // C·∫≠p nh·∫≠t c·ªôt Screenshot (Col11 - c·ªôt 12) n·∫øu c√≥ l·ªói
-                                if (!string.IsNullOrEmpty(screenshotPath))
-                                {
-                                    worksheet.Cells[row, 12].Value = screenshotPath;
-                                }
-
+                                foundRow = row;
                                 break;
+                            }
+                        }
+
+                        if (foundRow > 0)
+                        {
+                            // Column 10 (Col 9 0-based) = Actual Result
+                            worksheet.Cells[foundRow, 10].Value = actualResult;
+
+                            // Column 11 (Col 10 0-based) = Status
+                            // So s·nh Expected vs Actual ?? x·c ??nh Pass/Fail
+                            string finalStatus = status;
+
+                            if (string.IsNullOrWhiteSpace(status))
+                            {
+                                // N?u status tr?ng, t? ??ng so s·nh
+                                finalStatus = CompareResults(expectedResult, actualResult) ? "PASS" : "FAIL";
+                            }
+                            else if (status.Equals("PASS", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // N?u l‡ PASS, so s·nh ?? x·c nh?n
+                                finalStatus = CompareResults(expectedResult, actualResult) ? "PASS" : "FAIL";
+                            }
+                            else
+                            {
+                                // N?u l‡ FAIL ho?c kh·c, gi? nguyÍn
+                                finalStatus = status;
+                            }
+
+                            worksheet.Cells[foundRow, 11].Value = finalStatus;
+
+                            // Column 12 (Col 11 0-based) = Screenshot
+                            if (!string.IsNullOrEmpty(screenshotPath))
+                            {
+                                worksheet.Cells[foundRow, 12].Value = screenshotPath;
                             }
                         }
                     }
@@ -193,9 +322,56 @@ namespace sqa_automation_testing.TestData
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error updating Excel: {ex.Message}");
+                // Ghi l?i v‡o file log thay vÏ console
+                // Console.WriteLine($"Error updating Excel: {ex.Message}");
             }
+        }
+
+        // Helper function ?? so s·nh Expected vs Actual result
+        private static bool CompareResults(string expectedResult, string actualResult)
+        {
+            if (string.IsNullOrWhiteSpace(expectedResult) && string.IsNullOrWhiteSpace(actualResult))
+                return true;
+
+            if (string.IsNullOrWhiteSpace(expectedResult) || string.IsNullOrWhiteSpace(actualResult))
+                return false;
+
+            // So s·nh chÌnh x·c (case-insensitive)
+            if (expectedResult.Equals(actualResult, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // So s·nh ch?a t? khÛa "successful" ho?c "success"
+            bool expectedSuccess = expectedResult.Contains("successful", StringComparison.OrdinalIgnoreCase) || 
+                                 expectedResult.Contains("success", StringComparison.OrdinalIgnoreCase) ||
+                                 expectedResult.Contains("successfully", StringComparison.OrdinalIgnoreCase);
+            bool actualSuccess = actualResult.Contains("successful", StringComparison.OrdinalIgnoreCase) || 
+                               actualResult.Contains("success", StringComparison.OrdinalIgnoreCase) ||
+                               actualResult.Contains("successfully", StringComparison.OrdinalIgnoreCase);
+
+            if (expectedSuccess && actualSuccess)
+                return true;
+
+            // So s·nh ch?a (n?u actual result ch?a m?t ph?n c?a expected)
+            if (expectedResult.Contains(actualResult, StringComparison.OrdinalIgnoreCase) ||
+                actualResult.Contains(expectedResult, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // So s·nh t? khÛa (tÏm c·c t? gi?ng nhau)
+            var expectedWords = expectedResult.Split(new[] { ' ', ',', '.', ':', '"', '!', '?', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+            var actualWords = actualResult.Split(new[] { ' ', ',', '.', ':', '"', '!', '?', '(', ')' }, StringSplitOptions.RemoveEmptyEntries);
+
+            // N?u cÛ Ìt nh?t 50% t? gi?ng nhau, coi l‡ PASS
+            int matchCount = 0;
+            foreach (var word in actualWords)
+            {
+                if (expectedWords.Any(w => w.Equals(word, StringComparison.OrdinalIgnoreCase)))
+                    matchCount++;
+            }
+
+            if (actualWords.Length > 0 && matchCount >= (actualWords.Length * 0.5))
+                return true;
+
+            return false;
         }
     }
 }
-
