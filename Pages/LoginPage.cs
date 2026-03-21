@@ -1,10 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
 
 namespace sqa_automation_testing.Pages
 {
@@ -18,30 +13,35 @@ namespace sqa_automation_testing.Pages
             _driver = driver;
         }
 
-        // Định nghĩa các Elements (Ví dụ cho ParaBank)
+        // 1. Định nghĩa các Elements (Locators)
         private By _usernameInput = By.Name("username");
         private By _passwordInput = By.Name("password");
         private By _loginButton = By.CssSelector("input.button");
 
-        // Hàm nhập username
+        // Locators để đọc kết quả sau khi bấm Login
+        private By _errorMessage = By.ClassName("error");
+        private By _successTitle = By.ClassName("title");
+
+        // 2. Các hành động (Actions)
         public void EnterUsername(string username)
         {
-            _driver.FindElement(_usernameInput).SendKeys(username);
+            var element = _driver.FindElement(_usernameInput);
+            element.Clear(); // Xóa trắng ô trước khi nhập
+            element.SendKeys(username);
         }
 
-        // Hàm nhập password
         public void EnterPassword(string password)
         {
-            _driver.FindElement(_passwordInput).SendKeys(password);
+            var element = _driver.FindElement(_passwordInput);
+            element.Clear();
+            element.SendKeys(password);
         }
 
-        // Hàm click nút Login
         public void ClickLoginButton()
         {
             _driver.FindElement(_loginButton).Click();
         }
 
-        // Hàm login tổng hợp
         public void Login(string username, string password)
         {
             EnterUsername(username);
@@ -49,35 +49,32 @@ namespace sqa_automation_testing.Pages
             ClickLoginButton();
         }
 
-        // Hàm chụp screenshot
-        public string TakeScreenshot(string testName)
+        // HÀM: Đọc kết quả thực tế hiển thị trên web
+        public string GetLoginResult()
         {
-            try
+            // 1. Quét lỗi: Tìm tất cả thẻ có class "error", duyệt qua từng thẻ
+            var errorElements = _driver.FindElements(_errorMessage);
+            foreach (var err in errorElements)
             {
-                // Tạo thư mục Screenshots nếu chưa tồn tại
-                string screenshotFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
-                if (!Directory.Exists(screenshotFolder))
+                // Nếu thẻ này thực sự có chứa chữ (không phải thẻ ẩn/trống) thì lụm luôn
+                if (!string.IsNullOrWhiteSpace(err.Text))
                 {
-                    Directory.CreateDirectory(screenshotFolder);
+                    return err.Text.Trim();
                 }
-
-                // Tạo tên file screenshot với timestamp
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff");
-                string fileName = $"{testName}_{timestamp}.png";
-                string filePath = Path.Combine(screenshotFolder, fileName);
-
-                // Capture screenshot
-                ITakesScreenshot screenshotDriver = (ITakesScreenshot)_driver;
-                Screenshot screenshot = screenshotDriver.GetScreenshot();
-                screenshot.SaveAsFile(filePath);
-
-                return filePath;
             }
-            catch (Exception ex)
+
+            // 2. Quét thành công: Tương tự với thẻ tiêu đề "title"
+            var titleElements = _driver.FindElements(_successTitle);
+            foreach (var title in titleElements)
             {
-                Console.WriteLine($"Error taking screenshot: {ex.Message}");
-                return string.Empty;
+                if (!string.IsNullOrWhiteSpace(title.Text))
+                {
+                    return title.Text.Trim();
+                }
             }
+
+            // Nếu quét nát trang web mà vẫn không thấy chữ nào
+            return "Không lấy được thông báo từ web";
         }
     }
 }
