@@ -1,7 +1,7 @@
 ﻿using ExcelDataReader;
 using OfficeOpenXml;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome; // BỔ SUNG: Thư viện để cấu hình Chrome ẩn danh
+using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Support.UI;
 
 namespace sqa_automation_testing.Utilities
@@ -9,22 +9,20 @@ namespace sqa_automation_testing.Utilities
     public class TransferFundsHelpers
     {
         // ==================================================================
-        // BỔ SUNG: HÀM KHỞI TẠO DRIVER "TÀNG HÌNH" (Không đụng DriverFactory)
+        // HÀM KHỞI TẠO DRIVER "TÀNG HÌNH"
         // ==================================================================
         public static IWebDriver InitDriverBypassCloudflare()
         {
             ChromeOptions options = new ChromeOptions();
-            options.AddArgument("--start-maximized"); // Giữ nguyên code của Khoa
+            options.AddArgument("--start-maximized");
 
-            // --- MA THUẬT ẨN DANH VƯỢT CLOUDFLARE CHỈ CÓ Ở NHÁNH CỦA BẠN ---
-            // 1. Tắt cờ báo hiệu Automation của trình duyệt
+            // --- MA THUẬT ẨN DANH VƯỢT CLOUDFLARE ---
             options.AddArgument("--disable-blink-features=AutomationControlled");
-            // 2. Ẩn dòng chữ "Chrome is being controlled..."
             options.AddExcludedArgument("enable-automation");
             options.AddAdditionalOption("useAutomationExtension", false);
 
             IWebDriver driver = new ChromeDriver(options);
-            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(10); // Giữ nguyên code của Khoa
+            driver.Manage().Timeouts().ImplicitWait = TimeSpan.FromSeconds(10);
 
             return driver;
         }
@@ -65,6 +63,7 @@ namespace sqa_automation_testing.Utilities
                                 ? (CompareExpectedAndActual(expectedResult, actualResult) ? "PASS" : "FAIL")
                                 : status;
                             worksheet.Cells[foundRow, 11].Value = finalStatus;
+
                             if (!string.IsNullOrEmpty(screenshotFileName))
                                 worksheet.Cells[foundRow, 12].Value = screenshotFileName;
                         }
@@ -84,22 +83,32 @@ namespace sqa_automation_testing.Utilities
             return actualResult.Trim().ToLower().Contains(expectedResult.Trim().ToLower());
         }
 
+        // ĐÃ NÂNG CẤP: Xóa ảnh cũ, lưu ảnh mới cố định 1 tên
         public static string TakeScreenshotOnFail(IWebDriver driver, string testName)
         {
             try
             {
-                string screenshotFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                DirectoryInfo projectRoot = Directory.GetParent(baseDir).Parent.Parent.Parent;
+
+                string screenshotFolder = Path.Combine(projectRoot.FullName, "Screenshots");
                 if (!Directory.Exists(screenshotFolder)) Directory.CreateDirectory(screenshotFolder);
 
-                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                string fileName = $"{testName}_{timestamp}.png";
+                // Bỏ Timestamp, giữ tên file cố định theo tên test
+                string fileName = $"{testName}.png";
                 string fullPath = Path.Combine(screenshotFolder, fileName);
+
+                // NẾU ẢNH CŨ TỒN TẠI THÌ XÓA ĐI TRƯỚC KHI LƯU ẢNH MỚI
+                if (File.Exists(fullPath))
+                {
+                    File.Delete(fullPath);
+                }
 
                 ITakesScreenshot screenshotDriver = (ITakesScreenshot)driver;
                 Screenshot screenshot = screenshotDriver.GetScreenshot();
                 screenshot.SaveAsFile(fullPath);
 
-                return fileName;
+                return Path.Combine("Screenshots", fileName);
             }
             catch (Exception ex)
             {
@@ -177,7 +186,6 @@ namespace sqa_automation_testing.Utilities
             return ("", "");
         }
 
-        // Vẫn giữ lại hàm này làm phương án dự phòng bảo vệ lớp thứ 2
         public static void WaitForCloudflare(IWebDriver driver, int timeoutInSeconds = 30)
         {
             try
