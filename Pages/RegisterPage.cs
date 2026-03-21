@@ -1,5 +1,7 @@
-using OpenQA.Selenium;
 using System;
+using System.IO;
+using System.Linq;
+using OpenQA.Selenium;
 
 namespace sqa_automation_testing.Pages
 {
@@ -12,7 +14,7 @@ namespace sqa_automation_testing.Pages
             _driver = driver;
         }
 
-        // ??nh ngh?a các Elements cho Register
+        // 1. ??nh ngh?a các Elements cho Register
         private By _firstNameInput = By.Id("customer.firstName");
         private By _lastNameInput = By.Id("customer.lastName");
         private By _addressInput = By.Id("customer.address.street");
@@ -26,82 +28,97 @@ namespace sqa_automation_testing.Pages
         private By _confirmPasswordInput = By.Id("repeatedPassword");
         private By _registerButton = By.XPath("//input[@value='Register']");
 
-        // Method nh?p First Name
+        // Element cào k?t qu? tr? v?
+        private By _errorMessage = By.ClassName("error");
+        private By _successMessage = By.CssSelector("#rightPanel p");
+
+        // 2. Các hành ??ng (Actions) - ?ã thêm Clear()
         public void EnterFirstName(string firstName)
         {
-            _driver.FindElement(_firstNameInput).SendKeys(firstName);
+            var el = _driver.FindElement(_firstNameInput);
+            el.Clear();
+            el.SendKeys(firstName);
         }
 
-        // Method nh?p Last Name
         public void EnterLastName(string lastName)
         {
-            _driver.FindElement(_lastNameInput).SendKeys(lastName);
+            var el = _driver.FindElement(_lastNameInput);
+            el.Clear();
+            el.SendKeys(lastName);
         }
 
-        // Method nh?p Address
         public void EnterAddress(string address)
         {
-            _driver.FindElement(_addressInput).SendKeys(address);
+            var el = _driver.FindElement(_addressInput);
+            el.Clear();
+            el.SendKeys(address);
         }
 
-        // Method nh?p City
         public void EnterCity(string city)
         {
-            _driver.FindElement(_cityInput).SendKeys(city);
+            var el = _driver.FindElement(_cityInput);
+            el.Clear();
+            el.SendKeys(city);
         }
 
-        // Method nh?p State
         public void EnterState(string state)
         {
-            _driver.FindElement(_stateInput).SendKeys(state);
+            var el = _driver.FindElement(_stateInput);
+            el.Clear();
+            el.SendKeys(state);
         }
 
-        // Method nh?p ZipCode
         public void EnterZipCode(string zipCode)
         {
-            _driver.FindElement(_zipCodeInput).SendKeys(zipCode);
+            var el = _driver.FindElement(_zipCodeInput);
+            el.Clear();
+            el.SendKeys(zipCode);
         }
 
-        // Method nh?p Phone
         public void EnterPhone(string phone)
         {
-            _driver.FindElement(_phoneInput).SendKeys(phone);
+            var el = _driver.FindElement(_phoneInput);
+            el.Clear();
+            el.SendKeys(phone);
         }
 
-        // Method nh?p SSN
         public void EnterSSN(string ssn)
         {
-            _driver.FindElement(_ssnInput).SendKeys(ssn);
+            var el = _driver.FindElement(_ssnInput);
+            el.Clear();
+            el.SendKeys(ssn);
         }
 
-        // Method nh?p Username
         public void EnterUsername(string username)
         {
-            _driver.FindElement(_usernameInput).SendKeys(username);
+            var el = _driver.FindElement(_usernameInput);
+            el.Clear();
+            el.SendKeys(username);
         }
 
-        // Method nh?p Password
         public void EnterPassword(string password)
         {
-            _driver.FindElement(_passwordInput).SendKeys(password);
+            var el = _driver.FindElement(_passwordInput);
+            el.Clear();
+            el.SendKeys(password);
         }
 
-        // Method nh?p Confirm Password
         public void EnterConfirmPassword(string confirmPassword)
         {
-            _driver.FindElement(_confirmPasswordInput).SendKeys(confirmPassword);
+            var el = _driver.FindElement(_confirmPasswordInput);
+            el.Clear();
+            el.SendKeys(confirmPassword);
         }
 
-        // Method click Register button
         public void ClickRegisterButton()
         {
             _driver.FindElement(_registerButton).Click();
         }
 
         // Hàm Register hoàn ch?nh
-        public void Register(string firstName, string lastName, string address, string city, 
-                            string state, string zipCode, string phone, string ssn, 
-                            string username, string password)
+        public void Register(string firstName, string lastName, string address, string city,
+                             string state, string zipCode, string phone, string ssn,
+                             string username, string password)
         {
             EnterFirstName(firstName);
             EnterLastName(lastName);
@@ -113,20 +130,38 @@ namespace sqa_automation_testing.Pages
             EnterSSN(ssn);
             EnterUsername(username);
             EnterPassword(password);
-            EnterConfirmPassword(password);
+            EnterConfirmPassword(password); // ? ?ây b?n ?ang truy?n m?t kh?u trùng nhau ?? pass qua b??c xác nh?n
             ClickRegisterButton();
         }
 
-        // Method ch?p screenshot
+        // HÀM M?I: ??c k?t qu? sau khi b?m ??ng ký
+        public string GetRegisterResult()
+        {
+            // Tìm các thông báo l?i (ParaBank có th? tr? v? nhi?u l?i cùng lúc n?u b? tr?ng nhi?u ô)
+            var errorElements = _driver.FindElements(_errorMessage);
+            if (errorElements.Count > 0)
+            {
+                // Ghép t?t c? các l?i l?i thành m?t chu?i (ví d?: "First name is required. | Last name is required.")
+                return string.Join(" | ", errorElements.Select(e => e.Text));
+            }
+
+            // N?u không có l?i, tìm ?o?n text thông báo t?o tài kho?n thành công
+            var successElements = _driver.FindElements(_successMessage);
+            if (successElements.Count > 0)
+            {
+                return successElements[0].Text;
+            }
+
+            return "Không l?y ???c thông báo t? web";
+        }
+
+        // Hàm ch?p screenshot (Gi? nguyên)
         public string TakeScreenshot(string testName)
         {
             try
             {
                 string screenshotFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Screenshots");
-                if (!Directory.Exists(screenshotFolder))
-                {
-                    Directory.CreateDirectory(screenshotFolder);
-                }
+                if (!Directory.Exists(screenshotFolder)) Directory.CreateDirectory(screenshotFolder);
 
                 string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss-fff");
                 string fileName = $"{testName}_{timestamp}.png";
