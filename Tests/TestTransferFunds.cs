@@ -592,6 +592,93 @@ namespace sqa_automation_testing.Tests
             Assert.IsTrue(isMathCorrect, $"[{testCaseId}] Thất bại. Tài khoản đích không được cộng đúng ${amountToTransfer}. Thực tế: {actualResult}");
         }
 
+        [Test]
+        public void TC_TRA_030_ChuyenToanBoSoDu()
+        {
+            string testCaseId = "TC_TRA_030";
+
+            // Lấy Keyword mong muốn từ Excel
+            var testData = TransferFundsHelpers.GetTestDataById(testCaseId);
+            string expectedKeyword = testData.ExpectedKeyword;
+
+            TestContext.WriteLine($"[DEBUG] Kịch bản: Ép TK nguồn về đúng $100, sau đó chuyển toàn bộ kiểm tra có về $0 không.");
+
+            string actualResult = "";
+            bool isZero = false;
+
+            try
+            {
+                // =========================================================
+                // BƯỚC 1: ÉP SỐ DƯ VỀ ĐÚNG $100 (DATA SETUP)
+                // =========================================================
+                _driver.FindElement(By.LinkText("Accounts Overview")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                string balanceText = _driver.FindElement(By.XPath($"//a[text()='{_account1}']/parent::td/following-sibling::td[1]")).Text;
+                balanceText = balanceText.Replace("$", "").Replace(",", "").Trim();
+                double currentBalance = double.Parse(balanceText, System.Globalization.CultureInfo.InvariantCulture);
+
+                // Nếu tiền nhiều hơn 100, tẩu tán bớt phần dư sang tài khoản 2
+                if (currentBalance > 100)
+                {
+                    double excessAmount = currentBalance - 100;
+
+                    _driver.FindElement(By.LinkText("Transfer Funds")).Click();
+                    System.Threading.Thread.Sleep(1500);
+
+                    // Chuyển phần dư đi
+                    _transferPage.PerformTransfer(excessAmount.ToString(System.Globalization.CultureInfo.InvariantCulture), _account1, _account2);
+                    System.Threading.Thread.Sleep(2000);
+                }
+
+                // =========================================================
+                // BƯỚC 2: THỰC HIỆN KỊCH BẢN CHÍNH - CHUYỂN $100
+                // =========================================================
+                _driver.FindElement(By.LinkText("Transfer Funds")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                _transferPage.PerformTransfer("100", _account1, _account2);
+                System.Threading.Thread.Sleep(2000); // Chờ giao dịch xử lý xong
+
+
+                // =========================================================
+                // BƯỚC 3: KIỂM TRA SỐ DƯ XEM CÓ VỀ $0 KHÔNG
+                // =========================================================
+                _driver.FindElement(By.LinkText("Accounts Overview")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                string finalBalanceText = _driver.FindElement(By.XPath($"//a[text()='{_account1}']/parent::td/following-sibling::td[1]")).Text;
+                finalBalanceText = finalBalanceText.Replace("$", "").Replace(",", "").Trim();
+                double finalBalance = double.Parse(finalBalanceText, System.Globalization.CultureInfo.InvariantCulture);
+
+                // So sánh xem có đúng bằng 0 không
+                isZero = (finalBalance == 0);
+
+                actualResult = $"Đã thiết lập TK=$100 và chuyển hết. Số dư còn lại: ${finalBalance}";
+
+                if (isZero)
+                {
+                    TestContext.WriteLine($"Test PASSED: {actualResult}");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
+                }
+                else
+                {
+                    TestContext.WriteLine($"Test FAILED: {actualResult}");
+                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
+                throw;
+            }
+
+            // Chốt hạ Assert
+            Assert.IsTrue(isZero, $"[{testCaseId}] Thất bại. Số dư chưa về $0. Thực tế: {actualResult}");
+        }
+
         public void Dispose()
         {
             TearDown();
