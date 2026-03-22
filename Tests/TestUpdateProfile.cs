@@ -11,26 +11,27 @@ namespace sqa_automation_testing.Tests
         private string _currentTestName;
         private UpdateProfilePage _updateProfilePage;
 
+        // 1. THÊM BIẾN NÀY ĐỂ LƯU TÊN USER DÙNG CHO VIỆC LOGIN LẠI
+        private string _dynamicUser;
+
         [SetUp]
         public void Setup()
         {
             _currentTestName = TestContext.CurrentContext.Test.Name;
 
-            // 1. Tận dụng Driver tàng hình
             _driver = TransferFundsHelpers.InitDriverBypassCloudflare();
             _driver.Navigate().GoToUrl("https://parabank.parasoft.com/parabank/register.htm");
             TransferFundsHelpers.WaitForCloudflare(_driver);
 
-            // 2. Tạo User mới để đảm bảo có trạng thái Login hợp lệ
             RegisterPage registerPage = new RegisterPage(_driver);
-            string dynamicUser = "user_" + DateTime.Now.ToString("yyyyMMddHHmmss");
-            registerPage.Register("OldName", "OldLast", "Old Street", "Old City", "Old State", "11111", "0111111111", "123-45", dynamicUser, "Pass123!");
+
+            // 2. GÁN GIÁ TRỊ VÀO BIẾN TOÀN CỤC THAY VÌ BIẾN CỤC BỘ
+            _dynamicUser = "user_" + DateTime.Now.ToString("yyyyMMddHHmmss");
+
+            registerPage.Register("OldName", "OldLast", "Old Street", "Old City", "Old State", "11111", "0111111111", "123-45", _dynamicUser, "Pass123!");
             System.Threading.Thread.Sleep(2000);
 
-            // 3. Bấm sang menu Update Contact Info
             _driver.FindElement(By.LinkText("Update Contact Info")).Click();
-
-            // Angular của Parabank đôi khi load data cũ hơi chậm, cho nó 2s để nạp dữ liệu lên form
             System.Threading.Thread.Sleep(2000);
 
             _updateProfilePage = new UpdateProfilePage(_driver);
@@ -222,31 +223,76 @@ namespace sqa_automation_testing.Tests
 
 
         [Test]
-        public void TC_Temp_DungImDeLayXPath()
+        public void TC_UPD_019_LuuTruDB()
         {
-            // Data Test gán cứng từ Excel
-            string fName = "Khoa";
-            string lName = "Nguyen";
-            string address = "456 Le Loi";
-            string city = "Da Nang";
+            string testCaseId = "TC_UPD_019";
+
+            // Data Test dùng tên độc lạ để kiểm chứng
+            string fName = "KhoaDB";
+            string lName = "NguyenDB";
+            string address = "789 Data St";
+            string city = "Cloud City";
             string state = "VN";
-            string zip = "55000";
-            string phone = "0988888888";
+            string zip = "99999";
+            string phone = "0123456789";
 
-            TestContext.WriteLine("[DEBUG] Đang thực hiện cập nhật thông tin...");
+            string expectedKeyword = "Dữ liệu mới vừa cập nhật";
 
-            // 1. Xóa dữ liệu cũ, điền dữ liệu mới và Lưu
-            _updateProfilePage.UpdateInfo(fName, lName, address, city, state, zip, phone);
-            _updateProfilePage.ClickUpdateProfile();
+            TestContext.WriteLine($"[DEBUG] Cập nhật thành '{fName}' -> Đăng xuất -> Đăng nhập lại kiểm tra DB.");
 
-            // 2. CHẶN ĐỨNG TRÌNH DUYỆT TRONG 3 PHÚT (180,000 ms)
-            TestContext.WriteLine("Đã bấm Update thành công! Browser sẽ đứng im 3 phút để bạn soi HTML.");
-            TestContext.WriteLine("Bạn hãy bấm F12, dùng nút mũi tên (Inspect) chỉ vào dòng thông báo thành công để copy đoạn HTML nhé.");
+            string actualResult = "";
+            bool isSuccess = false;
 
-            System.Threading.Thread.Sleep(180000);
+            try
+            {
+                // Bước 1: Cập nhật thông tin và Lưu
+                _updateProfilePage.UpdateInfo(fName, lName, address, city, state, zip, phone);
+                _updateProfilePage.ClickUpdateProfile();
+                System.Threading.Thread.Sleep(2000);
 
-            // Hết 3 phút nó mới chạy qua đây và tự đóng browser
-            TestContext.WriteLine("Đã hết thời gian dừng.");
+                // Bước 2: Đăng xuất khỏi hệ thống
+                _driver.FindElement(By.LinkText("Log Out")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                // Bước 3: Đăng nhập lại bằng đúng User vừa tạo ở hàm Setup
+                _driver.FindElement(By.Name("username")).SendKeys(_dynamicUser);
+                _driver.FindElement(By.Name("password")).SendKeys("Pass123!");
+                _driver.FindElement(By.XPath("//input[@value='Log In']")).Click();
+                System.Threading.Thread.Sleep(2000);
+
+                // Bước 4: Chui lại vào trang Update Contact Info
+                _driver.FindElement(By.LinkText("Update Contact Info")).Click();
+                System.Threading.Thread.Sleep(2000); // Chờ Angular đổ data cũ từ DB lên form
+
+                // Bước 5: "Móc" dữ liệu từ thẻ input ra xem có đúng chữ mình đã nhập không
+                // Dùng .GetAttribute("value") để lấy chữ nằm bên trong ô nhập liệu
+                string actualFirstName = _driver.FindElement(By.Id("customer.firstName")).GetAttribute("value");
+                string actualLastName = _driver.FindElement(By.Id("customer.lastName")).GetAttribute("value");
+
+                // Bước 6: So sánh
+                isSuccess = (actualFirstName == fName && actualLastName == lName);
+                actualResult = $"First Name trên web: '{actualFirstName}', Last Name: '{actualLastName}'";
+
+                if (isSuccess)
+                {
+                    TestContext.WriteLine($"Test PASSED: Dữ liệu đã lưu thành công vào Database. {actualResult}");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
+                }
+                else
+                {
+                    TestContext.WriteLine($"Test FAILED: Lỗi mất dữ liệu DB! Kì vọng: '{fName}', Thực tế: '{actualFirstName}'");
+                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
+                throw;
+            }
+
+            Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Dữ liệu từ DB không khớp. Thực tế: {actualResult}");
         }
 
         public void Dispose()
