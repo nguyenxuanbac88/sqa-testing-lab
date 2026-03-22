@@ -1,7 +1,5 @@
 ﻿using OpenQA.Selenium;
 using OpenQA.Selenium.Support.UI; // <--- Bắt buộc phải có cái này để trị Dropdown
-using System;
-using System.Threading;
 
 namespace sqa_automation_testing.Pages
 {
@@ -74,6 +72,20 @@ namespace sqa_automation_testing.Pages
                     return "Không mở được tài khoản và cũng không thấy thông báo lỗi.";
                 }
             }
+        }
+
+        // Bấm mở tài khoản mới (dùng cấu hình mặc định là CHECKING)
+        public string OpenAccountAndGetId()
+        {
+            // Parabank đôi khi load dropdown chậm ở trang này, nên đợi 1 xíu
+            System.Threading.Thread.Sleep(1500);
+
+            // Bấm nút Open
+            driver.FindElement(openNewAccountButton).Click();
+
+            // Đợi kết quả và trả về số tài khoản mới
+            System.Threading.Thread.Sleep(1500);
+            return driver.FindElement(newAccountIdLink).Text;
         }
     }
 }

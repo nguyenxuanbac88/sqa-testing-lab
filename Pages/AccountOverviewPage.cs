@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Threading;
-using OpenQA.Selenium;
+﻿using OpenQA.Selenium;
 
 namespace sqa_automation_testing.Pages
 {
@@ -24,6 +21,11 @@ namespace sqa_automation_testing.Pages
         private readonly By _totalBalance = By.XPath("//b[contains(text(), 'Total')]/../following-sibling::td/b");
 
         private readonly By _detailsAccountId = By.Id("accountId");
+
+        // --- Region 1: Locators ---
+        private readonly By transferFundsMenuLink = By.LinkText("Transfer Funds");
+        // BỔ SUNG: Locator cho menu Open New Account
+        private readonly By openNewAccountMenuLink = By.LinkText("Open New Account");
 
         public AccountOverviewPage(IWebDriver driver)
         {
@@ -122,6 +124,20 @@ namespace sqa_automation_testing.Pages
             Thread.Sleep(1500); // Đợi xíu cho trang load
             var elements = driver.FindElements(_accountDetails);
             return elements.Count > 0 && elements[0].Displayed;
+        }
+
+        // Chuyển hướng sang trang Transfer
+        public TransferFundsPage ClickTransferFundsMenu()
+        {
+            driver.FindElement(transferFundsMenuLink).Click();
+            // Trả về object của Page tiếp theo (TransferFundsPage)
+            return new TransferFundsPage(driver);
+        }
+
+        // BỔ SUNG: Hàm click mở menu Open New Account
+        public void ClickOpenNewAccountMenu()
+        {
+            driver.FindElement(openNewAccountMenuLink).Click();
         }
     }
 }
