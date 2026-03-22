@@ -2,6 +2,7 @@
 
 namespace sqa_automation_testing.Pages
 {
+
     public class AccountOverviewPage
     {
         private readonly IWebDriver driver;
