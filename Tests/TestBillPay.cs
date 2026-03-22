@@ -286,6 +286,68 @@ namespace sqa_automation_testing.Tests
             Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
         }
 
+        [Test]
+        public void TC_BIL_027_TKNguonKhongDuTien()
+        {
+            string testCaseId = "TC_BIL_027";
+
+            // Data Test gán cứng
+            string name = "Nước sạch SG";
+            string address = "123 DBP";
+            string city = "HCM";
+            string state = "VN";
+            string zip = "70000";
+            string phone = "0901112222";
+            string account = "13579";
+            string verifyAccount = "13579";
+
+            // Ép một con số khổng lồ để chắc chắn vượt quá số dư hiện có
+            string amount = "999999";
+
+            // Từ khóa tiếng Anh mong đợi cho lỗi thiếu tiền
+            string expectedKeyword = "insufficient";
+
+            TestContext.WriteLine($"[DEBUG] Bill Pay -> Thanh toán số tiền KHỦNG: ${amount}, chờ lỗi: '{expectedKeyword}'");
+
+            string actualResult = "";
+            bool isSuccess = false;
+
+            try
+            {
+                // 1. Điền Form và Gửi
+                _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
+                _billPayPage.ClickSendPayment();
+
+                System.Threading.Thread.Sleep(2000); // Đợi server xử lý
+
+                // 2. Lấy thông báo thực tế từ web
+                actualResult = _billPayPage.GetResultMessage();
+
+                // 3. So sánh
+                isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
+
+                if (isSuccess)
+                {
+                    TestContext.WriteLine($"Test PASSED: Bắt được thông báo lỗi '{expectedKeyword}' trong '{actualResult}'");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
+                }
+                else
+                {
+                    TestContext.WriteLine($"Test FAILED: Không tìm thấy '{expectedKeyword}'. Thực tế là: '{actualResult}'");
+                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
+                throw;
+            }
+
+            Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
+        }
+
 
         [Test]
         public void TC_Temp_DungImDeLayXPath()
