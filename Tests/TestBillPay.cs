@@ -16,7 +16,6 @@ namespace sqa_automation_testing.Tests
         {
             _currentTestName = TestContext.CurrentContext.Test.Name;
 
-            // Tận dụng Driver tàng hình của nhánh Transfer Funds
             _driver = TransferFundsHelpers.InitDriverBypassCloudflare();
             _driver.Navigate().GoToUrl("https://parabank.parasoft.com/parabank/register.htm");
 
@@ -28,7 +27,6 @@ namespace sqa_automation_testing.Tests
             registerPage.Register("Test", "BillPay", "123 St", "City", "State", "12345", "0123456789", "123-45", dynamicUser, "Pass123!");
             System.Threading.Thread.Sleep(2000);
 
-            // Bấm trực tiếp vào Menu Bill Pay để né việc đụng file AccountOverviewPage của team
             _driver.FindElement(By.LinkText("Bill Pay")).Click();
             System.Threading.Thread.Sleep(1500);
 
@@ -45,47 +43,28 @@ namespace sqa_automation_testing.Tests
             }
         }
 
-        [Test]
-        public void TC_BIL_011_ThanhToanHoaDonThanhCong()
+        // =========================================================================
+        // HÀM HELPER DÙNG CHUNG CHO CÁC KỊCH BẢN KIỂM TRA THÔNG BÁO (TEXT)
+        // =========================================================================
+        private void ExecuteStandardBillPayTest(string testCaseId, string name, string address, string city, string state, string zip, string phone, string account, string verifyAccount, string amount, string expectedKeyword)
         {
-            string testCaseId = "TC_BIL_011";
-
-            // Data Test gán cứng theo yêu cầu
-            string name = "Nước sạch SG";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "13579";
-            string amount = "50";
-
-            // ĐÃ SỬA: Rút gọn từ khóa để né cái ID tài khoản động của Parabank
-            string expectedKeyword = "successful";
-
-            TestContext.WriteLine($"[DEBUG] Bill Pay -> Gửi cho: {name}, Số tiền: ${amount}");
+            TestContext.WriteLine($"[DEBUG] Bill Pay -> Amount: '{amount}', Chờ thông báo: '{expectedKeyword}'");
 
             string actualResult = "";
             bool isSuccess = false;
 
             try
             {
-                // 1. Điền Form và Gửi
                 _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
                 _billPayPage.ClickSendPayment();
+                System.Threading.Thread.Sleep(2000);
 
-                System.Threading.Thread.Sleep(2000); // Đợi server xử lý hóa đơn
-
-                // 2. Lấy thông báo
                 actualResult = _billPayPage.GetResultMessage();
-
-                // 3. So sánh
                 isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
 
                 if (isSuccess)
                 {
-                    TestContext.WriteLine($"Test PASSED: Bắt được từ khóa '{expectedKeyword}' trong '{actualResult}'");
+                    TestContext.WriteLine($"Test PASSED: Bắt được thông báo '{expectedKeyword}' trong '{actualResult}'");
                     TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
                 }
                 else
@@ -103,319 +82,89 @@ namespace sqa_automation_testing.Tests
             }
 
             Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
+        }
+
+        // =========================================================================
+        // DANH SÁCH 6 TEST CASES ĐÃ ĐƯỢC TỐI ƯU
+        // =========================================================================
+
+        [Test]
+        public void TC_BIL_011_ThanhToanHoaDonThanhCong()
+        {
+            // Truyền Full Data chuẩn
+            ExecuteStandardBillPayTest("TC_BIL_011", "Nước sạch SG", "123 DBP", "HCM", "VN", "70000", "0901112222", "13579", "13579", "50", "successful");
         }
 
         [Test]
         public void TC_BIL_012_BoTrongPayeeName()
         {
-            string testCaseId = "TC_BIL_012";
-
-            // Data Test gán cứng theo yêu cầu (Xử lý [Empty] thành chuỗi rỗng)
-            string name = "";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "13579";
-            string amount = "50";
-
-            // Từ khóa mong đợi dựa trên kịch bản Excel
-            string expectedKeyword = "Payee name is required";
-
-            TestContext.WriteLine($"[DEBUG] Bill Pay -> Bỏ trống Payee Name, Số tiền: ${amount}");
-
-            string actualResult = "";
-            bool isSuccess = false;
-
-            try
-            {
-                // 1. Điền Form và Gửi
-                _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
-                _billPayPage.ClickSendPayment();
-
-                System.Threading.Thread.Sleep(1500); // Đợi Validation hiển thị
-
-                // 2. Lấy thông báo lỗi chữ đỏ từ web
-                actualResult = _billPayPage.GetResultMessage();
-
-                // 3. So sánh
-                isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
-
-                if (isSuccess)
-                {
-                    TestContext.WriteLine($"Test PASSED: Bắt được thông báo lỗi '{expectedKeyword}' trong '{actualResult}'");
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
-                }
-                else
-                {
-                    TestContext.WriteLine($"Test FAILED: Không tìm thấy '{expectedKeyword}'. Thực tế là: '{actualResult}'");
-                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
-                }
-            }
-            catch (Exception ex)
-            {
-                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
-                throw;
-            }
-
-            Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
+            // Cố tình truyền Name là chuỗi rỗng ""
+            ExecuteStandardBillPayTest("TC_BIL_012", "", "123 DBP", "HCM", "VN", "70000", "0901112222", "13579", "13579", "50", "Payee name is required");
         }
 
         [Test]
         public void TC_BIL_021_VerifyAccountKhongKhop()
         {
-            string testCaseId = "TC_BIL_021";
-
-            // Data Test gán cứng - Cố tình làm sai lệch Account và Verify Account
-            string name = "Nước sạch SG";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "99999"; // <--- Chỗ này cố tình gõ sai
-            string amount = "50";
-
-            // Từ khóa mong đợi
-            string expectedKeyword = "The account numbers do not match";
-
-            TestContext.WriteLine($"[DEBUG] Bill Pay -> Account: {account}, Verify Account: {verifyAccount}");
-
-            string actualResult = "";
-            bool isSuccess = false;
-
-            try
-            {
-                // 1. Điền Form và Gửi
-                _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
-                _billPayPage.ClickSendPayment();
-
-                System.Threading.Thread.Sleep(1500); // Đợi Validation hiển thị
-
-                // 2. Lấy thông báo lỗi chữ đỏ từ web
-                actualResult = _billPayPage.GetResultMessage();
-
-                // 3. So sánh
-                isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
-
-                if (isSuccess)
-                {
-                    TestContext.WriteLine($"Test PASSED: Bắt được thông báo lỗi '{expectedKeyword}' trong '{actualResult}'");
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
-                }
-                else
-                {
-                    TestContext.WriteLine($"Test FAILED: Không tìm thấy '{expectedKeyword}'. Thực tế là: '{actualResult}'");
-                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
-                }
-            }
-            catch (Exception ex)
-            {
-                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
-                throw;
-            }
-
-            Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
+            // Cố tình truyền VerifyAccount = 99999
+            ExecuteStandardBillPayTest("TC_BIL_021", "Nước sạch SG", "123 DBP", "HCM", "VN", "70000", "0901112222", "13579", "99999", "50", "The account numbers do not match");
         }
-
 
         [Test]
         public void TC_BIL_023_BoTrongAmount()
         {
-            string testCaseId = "TC_BIL_023";
-
-            // Data Test gán cứng - Cố tình bỏ trống ô Amount
-            string name = "Nước sạch SG";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "13579";
-            string amount = ""; // <--- Chỗ này bỏ trống (Empty)
-
-            // Từ khóa mong đợi từ Excel
-            string expectedKeyword = "The amount cannot be empty";
-
-            TestContext.WriteLine($"[DEBUG] Bill Pay -> Bỏ trống Amount, chờ lỗi: '{expectedKeyword}'");
-
-            string actualResult = "";
-            bool isSuccess = false;
-
-            try
-            {
-                // 1. Điền Form và Gửi
-                _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
-                _billPayPage.ClickSendPayment();
-
-                System.Threading.Thread.Sleep(1500); // Đợi Validation hiển thị
-
-                // 2. Lấy thông báo lỗi chữ đỏ từ web
-                actualResult = _billPayPage.GetResultMessage();
-
-                // 3. So sánh
-                isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
-
-                if (isSuccess)
-                {
-                    TestContext.WriteLine($"Test PASSED: Bắt được thông báo lỗi '{expectedKeyword}' trong '{actualResult}'");
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
-                }
-                else
-                {
-                    TestContext.WriteLine($"Test FAILED: Không tìm thấy '{expectedKeyword}'. Thực tế là: '{actualResult}'");
-                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
-                }
-            }
-            catch (Exception ex)
-            {
-                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
-                throw;
-            }
-
-            Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
+            // Cố tình truyền Amount là chuỗi rỗng ""
+            ExecuteStandardBillPayTest("TC_BIL_023", "Nước sạch SG", "123 DBP", "HCM", "VN", "70000", "0901112222", "13579", "13579", "", "The amount cannot be empty");
         }
 
         [Test]
         public void TC_BIL_027_TKNguonKhongDuTien()
         {
-            string testCaseId = "TC_BIL_027";
-
-            // Data Test gán cứng
-            string name = "Nước sạch SG";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "13579";
-
-            // Ép một con số khổng lồ để chắc chắn vượt quá số dư hiện có
-            string amount = "999999";
-
-            // Từ khóa tiếng Anh mong đợi cho lỗi thiếu tiền
-            string expectedKeyword = "insufficient";
-
-            TestContext.WriteLine($"[DEBUG] Bill Pay -> Thanh toán số tiền KHỦNG: ${amount}, chờ lỗi: '{expectedKeyword}'");
-
-            string actualResult = "";
-            bool isSuccess = false;
-
-            try
-            {
-                // 1. Điền Form và Gửi
-                _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
-                _billPayPage.ClickSendPayment();
-
-                System.Threading.Thread.Sleep(2000); // Đợi server xử lý
-
-                // 2. Lấy thông báo thực tế từ web
-                actualResult = _billPayPage.GetResultMessage();
-
-                // 3. So sánh
-                isSuccess = actualResult.ToLower().Contains(expectedKeyword.ToLower());
-
-                if (isSuccess)
-                {
-                    TestContext.WriteLine($"Test PASSED: Bắt được thông báo lỗi '{expectedKeyword}' trong '{actualResult}'");
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
-                }
-                else
-                {
-                    TestContext.WriteLine($"Test FAILED: Không tìm thấy '{expectedKeyword}'. Thực tế là: '{actualResult}'");
-                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
-                }
-            }
-            catch (Exception ex)
-            {
-                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
-                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
-                throw;
-            }
-
-            Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
+            // Cố tình truyền Amount siêu to 999999
+            ExecuteStandardBillPayTest("TC_BIL_027", "Nước sạch SG", "123 DBP", "HCM", "VN", "70000", "0901112222", "13579", "13579", "999999", "insufficient");
         }
 
         [Test]
         public void TC_BIL_028_KiemTraTKNguonBiTruTien()
         {
+            // GIỮ NGUYÊN CASE NÀY VÌ LOGIC LÀM TOÁN KHÁC BIỆT HOÀN TOÀN
             string testCaseId = "TC_BIL_028";
-
-            // Data Test gán cứng
-            string name = "Nước sạch SG";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "13579";
-            string amountToPay = "50"; // Trừ 50 đô
-
-            // Câu thông báo lưu vào log Excel (không dùng để Get Text web)
+            string name = "Nước sạch SG", address = "123 DBP", city = "HCM", state = "VN", zip = "70000", phone = "0901112222", account = "13579", verifyAccount = "13579";
+            string amountToPay = "50";
             string expectedKeyword = "Số dư bị trừ khớp chính xác";
 
             TestContext.WriteLine($"[DEBUG] Bill Pay -> Kịch bản làm toán. Sẽ thanh toán ${amountToPay} và check số dư.");
-
             string actualResult = "";
             bool isMathCorrect = false;
 
             try
             {
-                // =========================================================
-                // BƯỚC 1: VÀO ACCOUNTS OVERVIEW LẤY SỐ DƯ & ID TK TRƯỚC
-                // =========================================================
+                // Bước 1: Lấy số dư đầu kỳ
                 _driver.FindElement(By.LinkText("Accounts Overview")).Click();
                 System.Threading.Thread.Sleep(1500);
 
-                // Lấy ID tài khoản dòng đầu tiên và số dư của nó
                 string accountId = _driver.FindElement(By.XPath("//table[@id='accountTable']/tbody/tr[1]/td[1]/a")).Text;
                 string balanceTextBefore = _driver.FindElement(By.XPath("//table[@id='accountTable']/tbody/tr[1]/td[2]")).Text;
-
                 balanceTextBefore = balanceTextBefore.Replace("$", "").Replace(",", "").Trim();
                 double balanceBefore = double.Parse(balanceTextBefore, System.Globalization.CultureInfo.InvariantCulture);
 
-                // =========================================================
-                // BƯỚC 2: TIẾN HÀNH THANH TOÁN HÓA ĐƠN
-                // =========================================================
+                // Bước 2: Thanh toán
                 _driver.FindElement(By.LinkText("Bill Pay")).Click();
                 System.Threading.Thread.Sleep(1500);
 
                 _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amountToPay);
                 _billPayPage.ClickSendPayment();
+                System.Threading.Thread.Sleep(2000);
 
-                System.Threading.Thread.Sleep(2000); // Đợi server xử lý
-
-                // =========================================================
-                // BƯỚC 3: QUAY LẠI ACCOUNTS OVERVIEW LẤY SỐ DƯ SAU
-                // =========================================================
+                // Bước 3: Lấy số dư cuối kỳ
                 _driver.FindElement(By.LinkText("Accounts Overview")).Click();
                 System.Threading.Thread.Sleep(1500);
 
-                // Dùng chính ID tài khoản vừa nãy để định vị lại dòng số dư
                 string balanceTextAfter = _driver.FindElement(By.XPath($"//a[text()='{accountId}']/parent::td/following-sibling::td[1]")).Text;
-
                 balanceTextAfter = balanceTextAfter.Replace("$", "").Replace(",", "").Trim();
                 double balanceAfter = double.Parse(balanceTextAfter, System.Globalization.CultureInfo.InvariantCulture);
 
-                // =========================================================
-                // BƯỚC 4: LÀM TOÁN SO SÁNH
-                // =========================================================
+                // Bước 4: Làm toán
                 double paymentAmount = double.Parse(amountToPay, System.Globalization.CultureInfo.InvariantCulture);
-
-                // Dùng Math.Abs để chống sai số thập phân của máy tính
                 isMathCorrect = Math.Abs(balanceAfter - (balanceBefore - paymentAmount)) < 0.01;
 
                 actualResult = $"Số dư đầu: ${balanceBefore}, Sau thanh toán: ${balanceAfter}. Bị trừ: ${(balanceBefore - balanceAfter)}";
@@ -442,35 +191,6 @@ namespace sqa_automation_testing.Tests
             Assert.IsTrue(isMathCorrect, $"[{testCaseId}] Thất bại. Số dư trừ không khớp. Thực tế: {actualResult}");
         }
 
-        [Test]
-        public void TC_Temp_DungImDeLayXPath()
-        {
-            // Data Test gán cứng 
-            string name = "Nước sạch SG";
-            string address = "123 DBP";
-            string city = "HCM";
-            string state = "VN";
-            string zip = "70000";
-            string phone = "0901112222";
-            string account = "13579";
-            string verifyAccount = "13579";
-            string amount = "50";
-
-            TestContext.WriteLine("[DEBUG] Đang thực hiện gửi thanh toán...");
-
-            // 1. Điền Form và Gửi
-            _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amount);
-            _billPayPage.ClickSendPayment();
-
-            // 2. CHẶN ĐỨNG TRÌNH DUYỆT TRONG 3 PHÚT (180,000 ms)
-            TestContext.WriteLine("Đã gửi thanh toán thành công! Browser sẽ đứng im 3 phút để bạn soi XPath.");
-            TestContext.WriteLine("Bạn hãy bấm F12, dùng nút mũi tên (Inspect) chỉ vào dòng thông báo để lấy locator nhé.");
-
-            System.Threading.Thread.Sleep(180000);
-
-            // Hết 3 phút nó mới chạy qua đây và tự đóng browser
-            TestContext.WriteLine("Đã hết thời gian dừng.");
-        }
 
         public void Dispose()
         {

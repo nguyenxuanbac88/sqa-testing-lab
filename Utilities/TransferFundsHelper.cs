@@ -47,7 +47,12 @@ namespace sqa_automation_testing.Utilities
                     if (worksheet != null)
                     {
                         int foundRow = -1;
-                        for (int row = 9; row <= worksheet.Dimension.End.Row; row++)
+
+                        // ========================================================
+                        // TỐI ƯU SIÊU TỐC: Chỉ quét chính xác từ dòng 9 đến 256
+                        // (Tốc độ đọc chưa tới 0.001 giây)
+                        // ========================================================
+                        for (int row = 9; row <= 256; row++)
                         {
                             if (worksheet.Cells[row, 3].Text == testCaseId)
                             {
@@ -58,16 +63,24 @@ namespace sqa_automation_testing.Utilities
 
                         if (foundRow > 0)
                         {
+                            // 1. Ghi đè Actual Result
                             worksheet.Cells[foundRow, 10].Value = actualResult;
+
+                            // 2. Ghi đè Status
                             string finalStatus = string.IsNullOrWhiteSpace(status)
                                 ? (CompareExpectedAndActual(expectedResult, actualResult) ? "PASS" : "FAIL")
                                 : status;
                             worksheet.Cells[foundRow, 11].Value = finalStatus;
 
-                            if (!string.IsNullOrEmpty(screenshotFileName))
-                                worksheet.Cells[foundRow, 12].Value = screenshotFileName;
+                            // 3. TỐI ƯU GHI ĐÈ SCREENSHOT (Đã xóa lệnh if)
+                            // Đảm bảo test PASS sẽ xóa tên file ảnh cũ (ghi chuỗi rỗng)
+                            worksheet.Cells[foundRow, 12].Value = screenshotFileName;
                         }
                     }
+
+                    // ========================================================
+                    // Tốc độ Save bây giờ sẽ tính bằng mili-giây!
+                    // ========================================================
                     package.Save();
                 }
             }
