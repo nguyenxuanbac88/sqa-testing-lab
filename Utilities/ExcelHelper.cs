@@ -1,11 +1,12 @@
-﻿using System;
+﻿using ExcelDataReader;
+using Microsoft.VisualStudio.TestPlatform.ObjectModel;
+using NUnit.Framework;
+using OfficeOpenXml;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
-using NUnit.Framework;
-using ExcelDataReader;
-using OfficeOpenXml;
 
 namespace sqa_automation_testing.Utilities // Hoặc .TestData tùy bạn đang để ở đâu
 {
@@ -497,6 +498,183 @@ namespace sqa_automation_testing.Utilities // Hoặc .TestData tùy bạn đang 
                 }
             }
         }
+        // ==========================================
+        // HÀM LẤY DỮ LIỆU FIND TRANSACTIONS (TIỀN TỐ TC_FND)
+        // ==========================================
+        public static IEnumerable<TestCaseData> GetFindTransactionData()
+        {
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
 
+            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read))
+            {
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    {
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+                    });
+
+                    DataTable table = result.Tables.Cast<DataTable>().FirstOrDefault(dt => dt.TableName.Contains("TestCase"));
+
+                    if (table != null && table.Rows.Count > DATA_START_ROW)
+                    {
+                        int yesCount = 0;
+                        HashSet<string> processedTestCases = new HashSet<string>();
+
+                        for (int i = DATA_START_ROW; i < table.Rows.Count && yesCount < 50; i++)
+                        {
+                            DataRow row = table.Rows[i];
+                            if (row.ItemArray.Length <= COL_RUN) continue;
+
+                            string runFlag = row[COL_RUN]?.ToString().Trim() ?? "";
+
+                            if (runFlag.Equals("YES", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string testCaseId = row[COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+
+                                if (string.IsNullOrWhiteSpace(testCaseId) || processedTestCases.Contains(testCaseId)) continue;
+
+                                // ĐÃ ĐỔI THÀNH TC_FND THEO LỆNH CỦA KHOA
+                                if (!testCaseId.StartsWith("TC_FND", StringComparison.OrdinalIgnoreCase)) continue;
+
+                                processedTestCases.Add(testCaseId);
+
+                                string fullStepAction = "";
+                                string fullTestData = "";
+                                string fullExpected = "";
+
+                                // THUẬT TOÁN GOM DÒNG (DÒ TỪ DÒNG HIỆN TẠI XUỐNG DƯỚI)
+                                for (int j = i; j < table.Rows.Count; j++)
+                                {
+                                    if (table.Rows[j].ItemArray.Length <= COL_TEST_CASE_ID) continue;
+
+                                    string currentTcId = table.Rows[j][COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+
+                                    // Nếu gặp ID mới khác với ID đang gom thì dừng lại
+                                    if (!string.IsNullOrWhiteSpace(currentTcId) && currentTcId != testCaseId && j > i) break;
+
+                                    fullStepAction += (table.Rows[j][COL_STEP_ACTION]?.ToString().Trim() ?? "") + " ";
+                                    fullTestData += (table.Rows[j][COL_DATA]?.ToString().Trim() ?? "") + " ";
+                                    fullExpected += (table.Rows[j][COL_EXPECTED_RESULT]?.ToString().Trim() ?? "") + " ";
+                                }
+
+                                // ==========================================
+                                // BÓC TÁCH DỮ LIỆU (Thiết kế riêng theo file Excel của Khoa)
+                                // ==========================================
+                                string searchType = "ID";
+
+                                // Gom Step Action và Test Data lại viết hoa hết để dễ quét
+                                string combinedText = (fullStepAction + " " + fullTestData).ToUpper();
+
+                                // 1. NHẬN DIỆN LOẠI TÌM KIẾM
+                                if (combinedText.Contains("RANGE") || combinedText.Contains("BETWEEN") || combinedText.Contains("TỚI"))
+                                    searchType = "RANGE"; // Bắt TC_FND_017
+                                else if (combinedText.Contains("DATE"))
+                                    searchType = "DATE";  // Bắt TC_FND_014
+                                else if (combinedText.Contains("AMOUNT") || combinedText.Contains("AMT"))
+                                    searchType = "AMOUNT"; // Bắt TC_FND_019
+                                else
+                                    searchType = "ID";    // Bắt TC_FND_011, 012
+
+                                // 2. LỤM GIÁ TRỊ TỪ CỘT TEST DATA (Dùng Regex siêu mạnh)
+                                string val1 = "";
+                                string val2 = "";
+
+                                // Biểu thức này sẽ tóm gọn mọi con số, kể cả ngày tháng có dấu gạch ngang (VD: 03-22-2026, 100, 14587)
+                                var matches = System.Text.RegularExpressions.Regex.Matches(fullTestData, @"[\d\.\-]+");
+
+                                if (matches.Count > 0)
+                                {
+                                    val1 = matches[0].Value; // Lụm con số đầu tiên làm Value 1
+                                }
+
+                                // Nếu là tìm theo RANGE (Từ ngày - Tới ngày) thì lụm thêm con số thứ 2
+                                if (searchType == "RANGE" && matches.Count >= 2)
+                                {
+                                    val2 = matches[1].Value;
+                                }
+
+                                // 3. ĐẨY VÀO TEST CASE
+                                var testCaseData = new TestCaseData(searchType, val1, val2, fullStepAction.Trim(), fullExpected.Trim(), testCaseId)
+                                    .SetName($"FindTrans_{testCaseId}");
+                                yield return testCaseData;
+                                yesCount++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // ==========================================
+        // HÀM LẤY DỮ LIỆU REQUEST LOAN (TC_LON)
+        // ==========================================
+        public static IEnumerable<TestCaseData> GetRequestLoanData()
+        {
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
+
+            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read))
+            {
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var result = reader.AsDataSet(new ExcelDataSetConfiguration() { ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false } });
+                    DataTable table = result.Tables.Cast<DataTable>().FirstOrDefault(dt => dt.TableName.Contains("TestCase"));
+
+                    if (table != null && table.Rows.Count > DATA_START_ROW)
+                    {
+                        int yesCount = 0;
+                        HashSet<string> processedTestCases = new HashSet<string>();
+
+                        for (int i = DATA_START_ROW; i < table.Rows.Count && yesCount < 30; i++)
+                        {
+                            DataRow row = table.Rows[i];
+                            if (row.ItemArray.Length <= COL_RUN) continue;
+
+                            string runFlag = row[COL_RUN]?.ToString().Trim() ?? "";
+
+                            if (runFlag.Equals("YES", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string testCaseId = row[COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+                                if (string.IsNullOrWhiteSpace(testCaseId) || processedTestCases.Contains(testCaseId)) continue;
+                                if (!testCaseId.StartsWith("TC_LON", StringComparison.OrdinalIgnoreCase)) continue; // CHỈ QUÉT TC_LON
+
+                                processedTestCases.Add(testCaseId);
+
+                                string fullStepAction = ""; string fullTestData = ""; string fullExpected = "";
+
+                                // GOM NHIỀU DÒNG LẠI THÀNH 1
+                                for (int j = i; j < table.Rows.Count; j++)
+                                {
+                                    if (table.Rows[j].ItemArray.Length <= COL_TEST_CASE_ID) continue;
+                                    string currentTcId = table.Rows[j][COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+                                    if (!string.IsNullOrWhiteSpace(currentTcId) && currentTcId != testCaseId && j > i) break;
+
+                                    fullStepAction += (table.Rows[j][COL_STEP_ACTION]?.ToString().Trim() ?? "") + " ";
+                                    fullTestData += (table.Rows[j][COL_DATA]?.ToString().Trim() ?? "") + " ";
+                                    fullExpected += (table.Rows[j][COL_EXPECTED_RESULT]?.ToString().Trim() ?? "") + " ";
+                                }
+
+                                // BÓC TÁCH DỮ LIỆU (Loan, Down, From Account)
+                                string loanAmt = ExtractValueFromTestData(fullTestData, "Loan Amount");
+                                if (string.IsNullOrWhiteSpace(loanAmt)) loanAmt = ExtractValueFromTestData(fullTestData, "Loan");
+
+                                string downPmt = ExtractValueFromTestData(fullTestData, "Down Payment");
+                                if (string.IsNullOrWhiteSpace(downPmt)) downPmt = ExtractValueFromTestData(fullTestData, "Down");
+
+                                string fromAcc = ExtractValueFromTestData(fullTestData, "From account");
+                                if (string.IsNullOrWhiteSpace(fromAcc)) fromAcc = ExtractValueFromTestData(fullTestData, "From");
+
+                                var testCaseData = new TestCaseData(loanAmt, downPmt, fromAcc, fullStepAction.Trim(), fullExpected.Trim(), testCaseId)
+                                    .SetName($"RequestLoan_{testCaseId}");
+
+                                yield return testCaseData;
+                                yesCount++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
