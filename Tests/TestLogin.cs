@@ -53,47 +53,27 @@ namespace sqa_automation_testing.Tests
                 TestContext.WriteLine($"[Step 2] Actual Result thu được từ web: '{actualResult}'");
                 TestContext.WriteLine($"[Step 3] Đang so sánh thông minh với Expected: '{expectedResult}'...");
 
-                // Bước 3: SMART ASSERT CHO LOGIN
-                bool isMatch = false;
-
-                // Để debug dễ hơn, in ra chữ in thường để so sánh
+                // Bước 3: SMART ASSERT (Siêu đơn giản theo ý Khoa)
                 string actualLower = actualResult.ToLower();
                 string expectedLower = expectedResult.ToLower();
+                bool isMatch = false;
 
-                // Kịch bản 1: Đăng nhập THÀNH CÔNG
-                if (expectedLower.Contains("thành công") || expectedLower.Contains("success") || expectedLower.Contains("overview"))
+                // 1. Nếu Excel mong đợi "thành công" -> Web có "overview" là PASS
+                if (expectedLower.Contains("thành công"))
                 {
-                    isMatch = actualLower.Contains("accounts overview");
+                    isMatch = actualLower.Contains("overview");
                 }
-                // Kịch bản 2: Đăng xuất THÀNH CÔNG
-                else if (expectedLower.Contains("logout") || expectedLower.Contains("đăng xuất"))
-                {
-                    isMatch = actualLower.Contains("customer login");
-                }
-                // Kịch bản 3: Cố tình nhập sai (Báo lỗi)
+                // 2. Các trường hợp còn lại (Báo lỗi sai pass, bỏ trống...)
                 else
                 {
-                    // Kiểm tra xem chữ trên web có chứa từ khóa nào trong Excel không
-                    isMatch = actualLower.Contains(expectedLower) || expectedLower.Contains(actualLower);
+                    // Gọt bỏ chữ "lỗi:" và dấu ngoặc kép (") mà bạn gõ trong Excel đi để so khớp cho chuẩn
+                    string cleanExpected = expectedLower.Replace("lỗi:", "").Replace("\"", "").Trim();
 
-                    // Bổ sung: Nếu bạn ghi chung chung chữ "sai mật khẩu" trong Excel
-                    if (!isMatch && actualLower.Contains("could not be verified") && expectedLower.Contains("sai"))
-                    {
-                        isMatch = true; // Châm chước cho Pass luôn!
-                    }
+                    // Chỉ cần chuỗi Actual chứa cụm Expected là chốt PASS
+                    isMatch = actualLower.Contains(cleanExpected) || cleanExpected.Contains(actualLower);
                 }
 
-                // IN RA LÝ DO TẠI SAO PASS/FAIL ĐỂ KIỂM CHỨNG
-                if (isMatch)
-                {
-                    TestContext.WriteLine($"=> KẾT LUẬN: Web báo đúng như Excel mong đợi -> Đánh giá PASS!");
-                }
-                else
-                {
-                    TestContext.WriteLine($"=> KẾT LUẬN: Web KHÔNG GIỐNG Excel mong đợi -> Đánh giá FAIL!");
-                }
-
-                Assert.IsTrue(isMatch, $"LỖI: Web hiển thị ('{actualResult}') KHÁC VỚI mong đợi ('{expectedResult}')");
+                Assert.IsTrue(isMatch, $"LỖI: Web hiện '{actualResult}' nhưng Excel đợi '{expectedResult}'");
 
                 // Bước 4: PASS
                 TestContext.WriteLine($"[Result] Test {testCaseId} PASSED");
