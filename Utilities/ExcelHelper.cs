@@ -77,9 +77,35 @@ namespace sqa_automation_testing.Utilities // Hoặc .TestData tùy bạn đang 
                                 string testData = row[COL_DATA]?.ToString() ?? "";
                                 string username = ExtractValueFromTestData(testData, "User");
                                 string password = ExtractValueFromTestData(testData, "Pass");
+
+                                // Đọc Expected Result ở dòng hiện tại
                                 string expectedResult = row[COL_EXPECTED_RESULT]?.ToString().Trim() ?? "";
 
-                                // ĐÃ XÓA LỆNH IF CHẶN USERNAME/PASSWORD RỖNG Ở ĐÂY
+                                // --- BẮT ĐẦU ĐOẠN DÒ TÌM EXPECTED RESULT XUỐNG CÁC DÒNG DƯỚI ---
+                                if (string.IsNullOrWhiteSpace(expectedResult))
+                                {
+                                    for (int j = i + 1; j < table.Rows.Count; j++)
+                                    {
+                                        if (table.Rows[j].ItemArray.Length <= COL_TEST_CASE_ID) continue;
+
+                                        // Nếu đụng ID của bài test khác -> Dừng lại ngay
+                                        string nextTestCaseId = table.Rows[j][COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+                                        if (!string.IsNullOrWhiteSpace(nextTestCaseId)) break;
+
+                                        // Nếu vẫn cùng 1 bài test, lôi Expected Result ra
+                                        if (table.Rows[j].ItemArray.Length > COL_EXPECTED_RESULT)
+                                        {
+                                            string nextExpectedResult = table.Rows[j][COL_EXPECTED_RESULT]?.ToString().Trim() ?? "";
+                                            if (!string.IsNullOrWhiteSpace(nextExpectedResult))
+                                            {
+                                                expectedResult = nextExpectedResult; // Lụm được rồi!
+                                                break; // Thoát vòng lặp
+                                            }
+                                        }
+                                    }
+                                }
+                                // --- KẾT THÚC ĐOẠN DÒ TÌM ---
+
                                 // Bắt buộc nạp test case vào hệ thống dù User/Pass có bị trống
                                 var testCaseData = new TestCaseData(username, password, expectedResult, testCaseId)
                                     .SetName($"Login_{testCaseId}");
@@ -285,5 +311,192 @@ namespace sqa_automation_testing.Utilities // Hoặc .TestData tùy bạn đang 
                 // Bỏ qua lỗi ngầm khi ghi Excel để không làm crash test
             }
         }
+        // ==========================================
+        // HÀM LẤY DỮ LIỆU ACCOUNT OVERVIEW (Dò Step Action)
+        // ==========================================
+        public static IEnumerable<TestCaseData> GetAccountOverviewData()
+        {
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
+
+            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read))
+            {
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    {
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+                    });
+
+                    DataTable table = result.Tables.Cast<DataTable>().FirstOrDefault(dt => dt.TableName.Contains("TestCase"));
+
+                    if (table != null && table.Rows.Count > DATA_START_ROW)
+                    {
+                        int yesCount = 0;
+                        HashSet<string> processedTestCases = new HashSet<string>();
+
+                        for (int i = DATA_START_ROW; i < table.Rows.Count && yesCount < 30; i++)
+                        {
+                            DataRow row = table.Rows[i];
+                            if (row.ItemArray.Length <= COL_RUN) continue;
+
+                            string runFlag = row[COL_RUN]?.ToString().Trim() ?? "";
+
+                            if (runFlag.Equals("YES", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string testCaseId = row[COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+
+                                if (string.IsNullOrWhiteSpace(testCaseId) || processedTestCases.Contains(testCaseId))
+                                    continue;
+
+                                // --- CHÚ Ý TIỀN TỐ TẠI ĐÂY ---
+                                if (!testCaseId.StartsWith("TC_ACC", StringComparison.OrdinalIgnoreCase))
+                                    continue;
+
+                                processedTestCases.Add(testCaseId);
+
+                                // Lấy dữ liệu ở dòng hiện tại (Dòng chứa ID)
+                                string expectedResult = row[COL_EXPECTED_RESULT]?.ToString().Trim() ?? "";
+                                string stepAction = row[COL_STEP_ACTION]?.ToString().Trim() ?? "";
+
+                                // THUẬT TOÁN DÒ MÌN VÀ VÉT MÁNG (Đã fix lỗi ghi đè)
+                                // Nếu 1 trong 2 ô bị trống thì mới phải đi tìm ở các dòng dưới
+                                if (string.IsNullOrWhiteSpace(expectedResult) || string.IsNullOrWhiteSpace(stepAction))
+                                {
+                                    for (int j = i + 1; j < table.Rows.Count; j++)
+                                    {
+                                        if (table.Rows[j].ItemArray.Length <= COL_TEST_CASE_ID) continue;
+                                        string nextTestCaseId = table.Rows[j][COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+                                        if (!string.IsNullOrWhiteSpace(nextTestCaseId)) break; // Sang bài test khác -> Dừng
+
+                                        // Nếu Expected đang trống, cố gắng lượm ở dòng này
+                                        if (string.IsNullOrWhiteSpace(expectedResult) && table.Rows[j].ItemArray.Length > COL_EXPECTED_RESULT)
+                                        {
+                                            string nextExpected = table.Rows[j][COL_EXPECTED_RESULT]?.ToString().Trim() ?? "";
+                                            if (!string.IsNullOrWhiteSpace(nextExpected)) expectedResult = nextExpected;
+                                        }
+
+                                        // Nếu Action đang trống, cố gắng lượm ở dòng này
+                                        if (string.IsNullOrWhiteSpace(stepAction) && table.Rows[j].ItemArray.Length > COL_STEP_ACTION)
+                                        {
+                                            string nextAction = table.Rows[j][COL_STEP_ACTION]?.ToString().Trim() ?? "";
+                                            if (!string.IsNullOrWhiteSpace(nextAction)) stepAction = nextAction;
+                                        }
+
+                                        // Lượm đủ cả 2 món rồi thì thoát vòng lặp cho nhẹ máy
+                                        if (!string.IsNullOrWhiteSpace(expectedResult) && !string.IsNullOrWhiteSpace(stepAction))
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                var testCaseData = new TestCaseData(stepAction, expectedResult, testCaseId)
+                                    .SetName($"Overview_{testCaseId}");
+
+                                yield return testCaseData;
+                                yesCount++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // ==========================================
+        // HÀM LẤY DỮ LIỆU OPEN NEW ACCOUNT (HỖ TRỢ MULTI-STEP CỦA KHOA)
+        // ==========================================
+        public static IEnumerable<TestCaseData> GetOpenNewAccountData()
+        {
+            System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "Testcase.xlsx");
+
+            using (var stream = File.Open(path, FileMode.Open, FileAccess.Read))
+            {
+                using (var reader = ExcelReaderFactory.CreateReader(stream))
+                {
+                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    {
+                        ConfigureDataTable = (_) => new ExcelDataTableConfiguration() { UseHeaderRow = false }
+                    });
+
+                    DataTable table = result.Tables.Cast<DataTable>().FirstOrDefault(dt => dt.TableName.Contains("TestCase"));
+
+                    if (table != null && table.Rows.Count > DATA_START_ROW)
+                    {
+                        int yesCount = 0;
+                        HashSet<string> processedTestCases = new HashSet<string>();
+
+                        for (int i = DATA_START_ROW; i < table.Rows.Count && yesCount < 30; i++)
+                        {
+                            DataRow row = table.Rows[i];
+                            if (row.ItemArray.Length <= COL_RUN) continue;
+
+                            string runFlag = row[COL_RUN]?.ToString().Trim() ?? "";
+
+                            if (runFlag.Equals("YES", StringComparison.OrdinalIgnoreCase))
+                            {
+                                string testCaseId = row[COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+
+                                if (string.IsNullOrWhiteSpace(testCaseId) || processedTestCases.Contains(testCaseId)) continue;
+                                if (!testCaseId.StartsWith("TC_OPN", StringComparison.OrdinalIgnoreCase)) continue;
+
+                                processedTestCases.Add(testCaseId);
+
+                                // --- CHIẾN THUẬT MỚI: GOM TOÀN BỘ DATA CỦA CÁC STEP ---
+                                string fullStepAction = "";
+                                string fullTestData = "";
+                                string expectedResult = "";
+
+                                // Quét từ dòng hiện tại trở xuống để gom dồn các step lại
+                                for (int j = i; j < table.Rows.Count; j++)
+                                {
+                                    if (table.Rows[j].ItemArray.Length <= COL_TEST_CASE_ID) continue;
+
+                                    string currentTcId = table.Rows[j][COL_TEST_CASE_ID]?.ToString().Trim() ?? "";
+
+                                    // Nếu đụng phải ID của bài Test Case khác thì dừng gom
+                                    if (!string.IsNullOrWhiteSpace(currentTcId) && currentTcId != testCaseId && j > i) break;
+
+                                    string step = table.Rows[j].ItemArray.Length > COL_STEP_ACTION ? table.Rows[j][COL_STEP_ACTION]?.ToString().Trim() ?? "" : "";
+                                    string data = table.Rows[j].ItemArray.Length > COL_DATA ? table.Rows[j][COL_DATA]?.ToString().Trim() ?? "" : "";
+                                    string exp = table.Rows[j].ItemArray.Length > COL_EXPECTED_RESULT ? table.Rows[j][COL_EXPECTED_RESULT]?.ToString().Trim() ?? "" : "";
+
+                                    // Nối dồn vào chuỗi tổng
+                                    if (!string.IsNullOrWhiteSpace(step)) fullStepAction += step + " ";
+                                    if (!string.IsNullOrWhiteSpace(data)) fullTestData += data + " ";
+                                    if (!string.IsNullOrWhiteSpace(exp)) expectedResult += exp + " ";
+                                }
+
+                                // BÓC TÁCH DỮ LIỆU TỪ CHUỖI TỔNG
+                                string accountType = "CHECKING"; // Mặc định
+
+                                // Quét chữ "SAVINGS" trong cả cột Data ("Loại: SAVINGS") lẫn cột Action
+                                if (fullTestData.ToUpper().Contains("SAVINGS") || fullStepAction.ToUpper().Contains("SAVINGS"))
+                                {
+                                    accountType = "SAVINGS";
+                                }
+
+                                // (Dự phòng cho TC_OPN_003) Tìm ID tài khoản nguồn nếu có chữ "ID: "
+                                string fromAccount = "";
+                                if (fullTestData.Contains("ID:"))
+                                {
+                                    // Cắt lấy đoạn mã ID phía sau chữ "ID:"
+                                    int idIndex = fullTestData.IndexOf("ID:") + 3;
+                                    fromAccount = fullTestData.Substring(idIndex).Trim().Split(' ')[0];
+                                }
+
+                                // Đẩy dữ liệu xịn sò này xuống cho hàm Test
+                                var testCaseData = new TestCaseData(accountType, fromAccount, fullStepAction, expectedResult.Trim(), testCaseId)
+                                    .SetName($"OpenAccount_{testCaseId}");
+
+                                yield return testCaseData;
+                                yesCount++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
     }
 }
