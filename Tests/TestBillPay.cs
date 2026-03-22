@@ -348,6 +348,99 @@ namespace sqa_automation_testing.Tests
             Assert.IsTrue(isSuccess, $"[{testCaseId}] Thất bại. Không tìm thấy thông báo '{expectedKeyword}'. Thực tế: {actualResult}");
         }
 
+        [Test]
+        public void TC_BIL_028_KiemTraTKNguonBiTruTien()
+        {
+            string testCaseId = "TC_BIL_028";
+
+            // Data Test gán cứng
+            string name = "Nước sạch SG";
+            string address = "123 DBP";
+            string city = "HCM";
+            string state = "VN";
+            string zip = "70000";
+            string phone = "0901112222";
+            string account = "13579";
+            string verifyAccount = "13579";
+            string amountToPay = "50"; // Trừ 50 đô
+
+            // Câu thông báo lưu vào log Excel (không dùng để Get Text web)
+            string expectedKeyword = "Số dư bị trừ khớp chính xác";
+
+            TestContext.WriteLine($"[DEBUG] Bill Pay -> Kịch bản làm toán. Sẽ thanh toán ${amountToPay} và check số dư.");
+
+            string actualResult = "";
+            bool isMathCorrect = false;
+
+            try
+            {
+                // =========================================================
+                // BƯỚC 1: VÀO ACCOUNTS OVERVIEW LẤY SỐ DƯ & ID TK TRƯỚC
+                // =========================================================
+                _driver.FindElement(By.LinkText("Accounts Overview")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                // Lấy ID tài khoản dòng đầu tiên và số dư của nó
+                string accountId = _driver.FindElement(By.XPath("//table[@id='accountTable']/tbody/tr[1]/td[1]/a")).Text;
+                string balanceTextBefore = _driver.FindElement(By.XPath("//table[@id='accountTable']/tbody/tr[1]/td[2]")).Text;
+
+                balanceTextBefore = balanceTextBefore.Replace("$", "").Replace(",", "").Trim();
+                double balanceBefore = double.Parse(balanceTextBefore, System.Globalization.CultureInfo.InvariantCulture);
+
+                // =========================================================
+                // BƯỚC 2: TIẾN HÀNH THANH TOÁN HÓA ĐƠN
+                // =========================================================
+                _driver.FindElement(By.LinkText("Bill Pay")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                _billPayPage.FillPayeeInfo(name, address, city, state, zip, phone, account, verifyAccount, amountToPay);
+                _billPayPage.ClickSendPayment();
+
+                System.Threading.Thread.Sleep(2000); // Đợi server xử lý
+
+                // =========================================================
+                // BƯỚC 3: QUAY LẠI ACCOUNTS OVERVIEW LẤY SỐ DƯ SAU
+                // =========================================================
+                _driver.FindElement(By.LinkText("Accounts Overview")).Click();
+                System.Threading.Thread.Sleep(1500);
+
+                // Dùng chính ID tài khoản vừa nãy để định vị lại dòng số dư
+                string balanceTextAfter = _driver.FindElement(By.XPath($"//a[text()='{accountId}']/parent::td/following-sibling::td[1]")).Text;
+
+                balanceTextAfter = balanceTextAfter.Replace("$", "").Replace(",", "").Trim();
+                double balanceAfter = double.Parse(balanceTextAfter, System.Globalization.CultureInfo.InvariantCulture);
+
+                // =========================================================
+                // BƯỚC 4: LÀM TOÁN SO SÁNH
+                // =========================================================
+                double paymentAmount = double.Parse(amountToPay, System.Globalization.CultureInfo.InvariantCulture);
+
+                // Dùng Math.Abs để chống sai số thập phân của máy tính
+                isMathCorrect = Math.Abs(balanceAfter - (balanceBefore - paymentAmount)) < 0.01;
+
+                actualResult = $"Số dư đầu: ${balanceBefore}, Sau thanh toán: ${balanceAfter}. Bị trừ: ${(balanceBefore - balanceAfter)}";
+
+                if (isMathCorrect)
+                {
+                    TestContext.WriteLine($"Test PASSED: {actualResult}");
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "PASS");
+                }
+                else
+                {
+                    TestContext.WriteLine($"Test FAILED: Toán sai! {actualResult}");
+                    string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                    TransferFundsHelpers.UpdateExcelResult(testCaseId, actualResult, expectedKeyword, "FAIL", fileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                string fileName = TransferFundsHelpers.TakeScreenshotOnFail(_driver, _currentTestName);
+                TransferFundsHelpers.UpdateExcelResult(testCaseId, "Lỗi kịch bản Web: " + ex.Message, expectedKeyword, "FAIL", fileName);
+                throw;
+            }
+
+            Assert.IsTrue(isMathCorrect, $"[{testCaseId}] Thất bại. Số dư trừ không khớp. Thực tế: {actualResult}");
+        }
 
         [Test]
         public void TC_Temp_DungImDeLayXPath()
